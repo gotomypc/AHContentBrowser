@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+            <title><readableTitle/></title>
+            <style id="article-content">
+                body {
+                    background: url('Contents/Resources/TextureBumpyPaper.png');
+                }
+                
+                h1.readableTitle {
+                    font-family: Palatino, Georgia, Times, "Times New Roman", serif;
+                    font-weight: bold;
+                    font-size: 1.33em;
+                    line-height: 1.25em;
+                    text-align: start;
+                    -webkit-hyphens: manual;
+                }
+                
+                img.leading-large {
+                    float: none;
+                    margin: auto;
+                    margin-bottom: 0.75em;
+                    display: block;
+                }
+                
+                img {
+                    float: none;
+                    margin: auto;
+                    margin-bottom: 0.75em;
+                    display: block;
+                    max-width: 100%;
+                    height: auto;
+                }
+                
+                h1 {
+                    font-size: 1.25em;
+                }
+                
+                h2 {
+                    font-size: 1.125em;
+                }
+                
+                h3 {
+                    font-size: 1.05em;
+                }
+                
+                .page.rtl {
+                    direction: rtl;
+                }
+                
+                .page a {
+                    text-decoration: none;
+                    color: rgb(32, 0, 127);
+                }
+                
+                .page a:visited {
+                    color: rgb(32, 0, 127);
+                }
+                
+                p.auto-hyphenated {
+                    -webkit-hyphens: auto;
+                }
+                
+                #readableArticle {
+                    width: 70%;
+                    margin: 0px auto;
+                    font-family: Palatino, Georgia, Times, 'Times New Roman', serif;
+                    font-size: 18px;
+                    line-height: 1.4;
+                    padding-bottom: 85px;
+                }
+                
+                .fade {
+                    opacity: 1;
+                    transition: opacity 0.15s ease-in-out;
+                    -moz-transition: opacity 0.15s ease-in-out;
+                    -webkit-transition: opacity 0.15s ease-in-out;
+                }
+                
+                p pre {
+                    white-space: pre-wrap;
+                }
+                
+                p img.image-tiny {
+                    /* Don't float very small images -- let them display where they occur in the text. */
+                    float: none;
+                    margin: 0;
+                }
+                
+                p img.image-large {
+                    float: none;
+                    margin: auto;
+                    margin-bottom: 0.75em;
+                    display: block;
+                }
+                
+                p .leading-image {
+                    font-family: Helvetica, sans-serif;
+                    margin-bottom: .25em;
+                    -webkit-hyphens: manual;
+                }
+                
+                p .leading-image img {
+                    margin: auto;
+                    float: none;
+                    display: block;
+                    clear: both;
+                }
+                
+                p .leading-image img.full-width {
+                    width: 100%;
+                }
+                
+                p .leading-image .credit {
+                    color: #909090;
+                    font-size: 0.55em;
+                    margin: 0;
+                    text-align: right;
+                    width: 100%;
+                }
+                
+                p .leading-image .caption {
+                    color: #666;
+                    font-size: 0.7em;
+                    line-height: 140%;
+                    margin-top: 0.4em;
+                    width: 100%;
+                }
+                
+                p .leading-image .credit + .caption {
+                    margin-top: 0.1em;
+                }
+                
+                .float {
+                    margin: 8px 0;
+                    font-size: 65%;
+                    line-height: 1.4;
+                    text-align: start;
+                    -webkit-hyphens: manual;
+                }
+                
+                .float.left {
+                    float: left;
+                    margin-right: 20px;
+                }
+                
+                .float.right {
+                    float: right;
+                    margin-left: 20px;
+                }
+                
+                .float.full-width {
+                    float: none;
+                    display: block;
+                    font-size: 100%;
+                }
+                
+                .title {
+                    display: none;
+                }
+                
+                </style>
+            
+            </head>
+    <body onload="makeReadable()">
+        <div id="readableURL" style="display:none"><readableURL/></div>
+        <div id="readableArticle">
+            <h1 id="readableTitle"><readableTitle/></h1>
+            <div id="readableArticleTemplate">
+                <readableTemplate/>
+            </div>
+        </div>
+    </body>
+    
+</html>
