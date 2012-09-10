@@ -13,7 +13,6 @@
 		9A7DA71615FE641A009F79DA /* Credits.rtf in Resources */ = {isa = PBXBuildFile; fileRef = 9A7DA71415FE641A009F79DA /* Credits.rtf */; };
 		9A7DA71915FE641A009F79DA /* AHAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 9A7DA71815FE641A009F79DA /* AHAppDelegate.m */; };
 		9A7DA71C15FE641A009F79DA /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 9A7DA71A15FE641A009F79DA /* MainMenu.xib */; };
-		9A7DA72715FE667B009F79DA /* TBXML.m in Sources */ = {isa = PBXBuildFile; fileRef = 9A7DA72615FE667B009F79DA /* TBXML.m */; };
 		9A7DA72A15FE677F009F79DA /* AHContentParser.m in Sources */ = {isa = PBXBuildFile; fileRef = 9A7DA72915FE677F009F79DA /* AHContentParser.m */; };
 		9A7DA72D15FE6813009F79DA /* AHContentBrowser.m in Sources */ = {isa = PBXBuildFile; fileRef = 9A7DA72C15FE6813009F79DA /* AHContentBrowser.m */; };
 		9A7DA72F15FE68C7009F79DA /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A7DA72E15FE68C7009F79DA /* WebKit.framework */; };
@@ -34,8 +33,6 @@
 		9A7DA71715FE641A009F79DA /* AHAppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AHAppDelegate.h; sourceTree = "<group>"; };
 		9A7DA71815FE641A009F79DA /* AHAppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AHAppDelegate.m; sourceTree = "<group>"; };
 		9A7DA71B15FE641A009F79DA /* en */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = en; path = en.lproj/MainMenu.xib; sourceTree = "<group>"; };
-		9A7DA72515FE667B009F79DA /* TBXML.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TBXML.h; sourceTree = "<group>"; };
-		9A7DA72615FE667B009F79DA /* TBXML.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TBXML.m; sourceTree = "<group>"; };
 		9A7DA72815FE677F009F79DA /* AHContentParser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AHContentParser.h; sourceTree = "<group>"; };
 		9A7DA72915FE677F009F79DA /* AHContentParser.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AHContentParser.m; sourceTree = "<group>"; };
 		9A7DA72B15FE6813009F79DA /* AHContentBrowser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AHContentBrowser.h; sourceTree = "<group>"; };
@@ -98,7 +95,6 @@
 			isa = PBXGroup;
 			children = (
 				9A7DA72215FE667B009F79DA /* Classes */,
-				9A7DA72315FE667B009F79DA /* Vendor */,
 				9A7DA71715FE641A009F79DA /* AHAppDelegate.h */,
 				9A7DA71815FE641A009F79DA /* AHAppDelegate.m */,
 				9A7DA71A15FE641A009F79DA /* MainMenu.xib */,
@@ -129,23 +125,6 @@
 				9A7DA73415FE6927009F79DA /* content.html */,
 			);
 			path = Classes;
-			sourceTree = "<group>";
-		};
-		9A7DA72315FE667B009F79DA /* Vendor */ = {
-			isa = PBXGroup;
-			children = (
-				9A7DA72415FE667B009F79DA /* TBXML */,
-			);
-			path = Vendor;
-			sourceTree = "<group>";
-		};
-		9A7DA72415FE667B009F79DA /* TBXML */ = {
-			isa = PBXGroup;
-			children = (
-				9A7DA72515FE667B009F79DA /* TBXML.h */,
-				9A7DA72615FE667B009F79DA /* TBXML.m */,
-			);
-			path = TBXML;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -216,7 +195,6 @@
 			files = (
 				9A7DA71215FE641A009F79DA /* main.m in Sources */,
 				9A7DA71915FE641A009F79DA /* AHAppDelegate.m in Sources */,
-				9A7DA72715FE667B009F79DA /* TBXML.m in Sources */,
 				9A7DA72A15FE677F009F79DA /* AHContentParser.m in Sources */,
 				9A7DA72D15FE6813009F79DA /* AHContentBrowser.m in Sources */,
 			);
@@ -346,6 +324,7 @@
 				9A7DA72115FE641A009F79DA /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

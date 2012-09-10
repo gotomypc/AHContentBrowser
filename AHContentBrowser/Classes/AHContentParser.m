@@ -7,7 +7,6 @@
 //
 
 #import "AHContentParser.h"
-#import "TBXML.h"
 
 
 @interface AHContentInfo : NSObject
@@ -28,11 +27,12 @@
 
 @implementation AHContentParser
 {
-    TBXML *tbxml;
     int numConsectiveReadableElements;
     NSMutableArray *_readableElements;
     CGFloat divCount;
     CGFloat paragraphCount;
+    NSString *htmlString;
+    NSRegularExpression *paragraphsRe;
 }
 
 -(id) init {
@@ -41,6 +41,8 @@
         divCount = 0;
         paragraphCount = 0;
         _readableElements = [NSMutableArray array];
+        NSError *error;
+        paragraphsRe = [[NSRegularExpression alloc] initWithPattern:@"<p>" options:NSRegularExpressionCaseInsensitive error:&error];
     }
     return self;
 }
@@ -48,9 +50,8 @@
 - (id) initWithString:(NSString*) str {
     self = [self init];
     if (self) {
-        NSError *error;
-        tbxml = [TBXML newTBXMLWithXMLString:str error:&error];
-        [self extractContent:tbxml.rootXMLElement];
+        htmlString = str;
+        [self parse];
     }
     return self;
 }
@@ -61,76 +62,97 @@
     if (self) {
         NSError *error;
         if (data) {
-            tbxml = [TBXML newTBXMLWithXMLData:data error:&error];
-            [self extractContent:tbxml.rootXMLElement];
+            NSInteger encodings[4] = {
+                NSUTF8StringEncoding,
+                NSASCIIStringEncoding,
+                NSMacOSRomanStringEncoding,
+                NSUTF16StringEncoding
+            };
+            
+            for( NSInteger i = 0; i < sizeof( encodings ) / sizeof( NSInteger ); i++ )
+            {
+                if( ( htmlString = [[NSString alloc] initWithData:data
+                                                         encoding:encodings[i]]  ) != nil )
+                {
+                    break;
+                }
+            }
+            [self parse];
+            
+            
         }
     }
     return self;
 }
 
--(NSString*) cleanBeforeParsing:(NSString*)str {
-    NSString *doubleBRsRe = @"(?:<br //>){2,}";
-	NSError *error = NULL;
-	NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:doubleBRsRe
-                                                                           options:NSRegularExpressionCaseInsensitive
-	                                                                         error:&error];
-	NSString *modifiedString = [regex stringByReplacingMatchesInString:str options:0 range:NSMakeRange(0, [str length]) withTemplate:@"\n"];
-    return modifiedString;
+
+
+-(void) parse {
+    
+    if  (!htmlString) {
+        return;
+    }
+    
+    NSDate *startTime = [NSDate date];
+    
+    // We don't parse things into a dom or html because it takes too long, and is really unreliable
+    
+    // Step 1: First look for paragraphs with lots of text, the quickest way to content on the web
+    NSRange pRange = [htmlString rangeOfString:@"<p" options:NSCaseInsensitiveSearch];
+    //get paragraphs
+    while (pRange.location != NSNotFound) {
+        NSRange endOfPRange = [htmlString rangeOfString:@"</p>" options:NSCaseInsensitiveSearch range:NSMakeRange(pRange.location, htmlString.length - pRange.location)];
+        if (endOfPRange.location != NSNotFound) {
+            AHContentInfo *contentInfo = [[AHContentInfo alloc] init];
+            NSRange closingStartTagRange = [htmlString rangeOfString:@">" options:NSCaseInsensitiveSearch range:NSMakeRange(pRange.location+2, htmlString.length - pRange.location +2su)];
+            NSString *text =[htmlString substringWithRange:NSMakeRange(closingStartTagRange.location+1, endOfPRange.location)];
+            
+            // test the text out
+
+            // sufficient length
+            if (text.length < 100) break;
+            
+            
+            contentInfo.text = text;
+            [_readableElements addObject:contentInfo];
+            self.foundContent = YES;
+            pRange = [htmlString rangeOfString:@"<p" options:NSCaseInsensitiveSearch range:NSMakeRange(endOfPRange.location, htmlString.length -endOfPRange.location)];
+        }
+    }
+    
+    
+    // If 5 or more paragraphs with good content were found, we are pretty good
+    
+    NSLog(@"Time to parse content: %f", [[NSDate date] timeIntervalSinceDate:startTime] );
+    
 }
 
 
 
--(void) extractContent:(TBXMLElement*) element {
+-(NSString*) removeTagsNamed:(NSString*) tagName fromString:(NSString*) str {
+    NSScanner *theScanner;
+    NSString *gt =nil;
+    NSString *ret = str;
     
-    do {
-        NSString *elementName = [TBXML elementName:element] ;
-        if ([elementName rangeOfString:@"br"].location != NSNotFound) {
-            NSLog(@"");
-        }
-        
-        AHContentInfo *contentElement = nil;
-        if ([elementName isEqualToString:@"p"]) {
-            NSString *text = [TBXML textForElement:element];
-            if (text.length > 30) {
-                self.foundContent = YES;
-                contentElement = [[AHContentInfo alloc] init];
-                contentElement.text = [TBXML textForElement:element];
-                contentElement.elementName = elementName;
-                paragraphCount++;
-            }
-            
-        }
-        
-        // divs
-        if (element->firstChild && [elementName isEqualToString:@"div"] && [[TBXML elementName:element->firstChild] isEqualToString:@"br"]) {
-            self.foundContent = YES;
-            contentElement = [[AHContentInfo alloc] init];
-            contentElement.text = [TBXML textForElement:element];
-            contentElement.elementName = elementName;
-            divCount++;
-            //We are only interested in divs with lots of text, relatively few links, and little nesting
-        }
-        
-        
-        // Is this a quote
-        if (contentElement && element->parentElement && [[TBXML elementName:element->parentElement] isEqualToString:@"blockquote"]) {
-            contentElement.isQuote = YES;
-        }
-        
-        
-        if (contentElement) [_readableElements addObject:contentElement];
-        
-        
-        
-        // if the element has child elements, process them
-        if (element->firstChild) {
-            [self extractContent:element->firstChild];
-        }
-        
-        // Obtain next sibling element
-    } while ((element = element->nextSibling));
+    theScanner = [NSScanner scannerWithString:str];
+    [theScanner setCaseSensitive:NO];
     
-    
+    while ([theScanner isAtEnd] == NO) {
+        
+        
+        // find start of tag
+        [theScanner scanUpToString:[NSString stringWithFormat:@"<%@", tagName] intoString:NULL] ;
+        
+        // find end of tag
+        [theScanner scanUpToString:[NSString stringWithFormat:@"</%@>", tagName] intoString:&gt] ;
+        
+        // replace the found tag with a space
+        //(you can filter multi-spaces out later if you wish)
+        
+        ret = [ret stringByReplacingOccurrencesOfString:[NSString stringWithFormat:@"%@</script>", gt] withString:@""];
+        
+    }
+    return ret;
 }
 
 -(NSString*) contentHTML {
