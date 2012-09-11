@@ -20,7 +20,7 @@
 @implementation AHContentInfo
 
 -(NSString*) description {
-    return [NSString stringWithFormat:@"%@", self.elementName];
+    return [NSString stringWithFormat:@"%@", self.text];
 }
 @end
 
@@ -60,7 +60,6 @@
 - (id) initWithData:(NSData*) data {
     self = [self init];
     if (self) {
-        NSError *error;
         if (data) {
             NSInteger encodings[4] = {
                 NSUTF8StringEncoding,
@@ -99,26 +98,35 @@
     
     // Step 1: First look for paragraphs with lots of text, the quickest way to content on the web
     NSRange pRange = [htmlString rangeOfString:@"<p" options:NSCaseInsensitiveSearch];
+    NSRange endOfPRange;
+    NSRange closingStartTagRange;
     //get paragraphs
     while (pRange.location != NSNotFound) {
-        NSRange endOfPRange = [htmlString rangeOfString:@"</p>" options:NSCaseInsensitiveSearch range:NSMakeRange(pRange.location, htmlString.length - pRange.location)];
+        endOfPRange = [htmlString rangeOfString:@"</p>" options:NSCaseInsensitiveSearch range:NSMakeRange(pRange.location, htmlString.length - pRange.location)];
         if (endOfPRange.location != NSNotFound) {
-            AHContentInfo *contentInfo = [[AHContentInfo alloc] init];
-            NSRange closingStartTagRange = [htmlString rangeOfString:@">" options:NSCaseInsensitiveSearch range:NSMakeRange(pRange.location+2, htmlString.length - pRange.location +2su)];
-            NSString *text =[htmlString substringWithRange:NSMakeRange(closingStartTagRange.location+1, endOfPRange.location)];
+            closingStartTagRange = [htmlString rangeOfString:@">" options:NSCaseInsensitiveSearch range:NSMakeRange(pRange.location + pRange.length, htmlString.length - endOfPRange.location)];
             
-            // test the text out
+            
+            if (closingStartTagRange.location != NSNotFound) {
+                AHContentInfo *contentInfo = [[AHContentInfo alloc] init];
+                NSString *text =[htmlString substringWithRange:NSMakeRange(closingStartTagRange.location+1, endOfPRange.location - closingStartTagRange.location -1)];
+                
+                // test text
+                
+                // sufficient length
+                if (text.length < 10 ) {
+                    pRange = [htmlString rangeOfString:@"<p" options:NSCaseInsensitiveSearch range:NSMakeRange(endOfPRange.location, htmlString.length -endOfPRange.location-1)];
+                    continue;
+                }
 
-            // sufficient length
-            if (text.length < 100) break;
-            
-            
-            contentInfo.text = text;
-            [_readableElements addObject:contentInfo];
-            self.foundContent = YES;
-            pRange = [htmlString rangeOfString:@"<p" options:NSCaseInsensitiveSearch range:NSMakeRange(endOfPRange.location, htmlString.length -endOfPRange.location)];
+                contentInfo.text = text;
+                [_readableElements addObject:contentInfo];
+                self.foundContent = YES;
+                pRange = [htmlString rangeOfString:@"<p" options:NSCaseInsensitiveSearch range:NSMakeRange(endOfPRange.location, htmlString.length -endOfPRange.location-1)];
+            }
         }
     }
+    
     
     
     // If 5 or more paragraphs with good content were found, we are pretty good
