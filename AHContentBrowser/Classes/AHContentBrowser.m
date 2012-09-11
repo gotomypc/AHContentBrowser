@@ -46,7 +46,7 @@
     [[NSUserDefaults standardUserDefaults] setBool:TRUE forKey:@"WebKitDeveloperExtras"];
     [[NSUserDefaults standardUserDefaults] synchronize];
     
-    self.url = [NSURL URLWithString:@"http://www.latimes.com/news/nation/nationnow/la-na-nn-fbi-trenton-mayor-corruption-20120910,0,7844623.story"];
+    self.url = [NSURL URLWithString:@"http://content.usatoday.com/communities/ondeadline/post/2012/09/10/world-trade-cener/70000045/1?csp=ip#.UE9tNaTyZAM"];
 }
 
 -(IBAction)searchFieldChanged:(id)sender {
