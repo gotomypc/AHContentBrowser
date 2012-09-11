@@ -91,15 +91,10 @@
     }
     
     NSDate *startTime = [NSDate date];
+    AHContentTextChunk *currentChunk;
     
     // We don't parse things into a dom or html because it takes too long, and is really unreliable
-    
-    // Step 1: First look for paragraphs with lots of text, the quickest way to content on the web
-    AHContentTextChunk *currentChunk;
-    //get paragraphs
-    
-    //_htmlString = [AHContentParser stringByStrippingHTML:_htmlString excludeRegEx:kAHContentTagsToKeep];
-    //NSUInteger *num = [AHContentParser countString:@"</p>" inText:_htmlString];
+    // Instead we split the html into tokens and weight them heuristically according to html coding practices
     
    NSArray * lines = [_htmlString componentsSeparatedByCharactersInSet: [NSCharacterSet characterSetWithCharactersInString:@"<>"]];
     for (int i =0; i< lines.count; i++) {
