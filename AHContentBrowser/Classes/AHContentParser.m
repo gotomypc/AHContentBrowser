@@ -1,4 +1,4 @@
-//
+    //
 //  AHContentParser.m
 //  AHContentBrowser
 //
@@ -9,14 +9,16 @@
 #import "AHContentParser.h"
 
 
+#define kAHContentTagsNames @"(?i:p|pre|h2|blockquote)"
 #define kAHContentTagsToKeep @"</?(?i:br|strong|ul|a|img|p)(.|\n)*?>"
+#define kAHContentTagsToRemove @"script"
 
 @interface AHContentTextChunk : NSObject
 
 @property (nonatomic) NSString *text;
 @property (nonatomic) NSString *elementName;
 @property (nonatomic) BOOL isQuote;
-@property (nonatomic) NSRange textRange;
+@property (nonatomic) NSInteger index;
 @property (nonatomic, weak) AHContentTextChunk *previousChunk;
 @property (nonatomic, weak) AHContentTextChunk *nextChunk;
 
@@ -35,11 +37,16 @@
     int numConsectiveReadableElements;
     NSMutableArray *_contentChunks;
     NSString *_htmlString;
+    NSRegularExpression *_contentTagsRe;
+    NSRegularExpression *_unwantedRe;
+    AHSAXParser *_saxParser;
 }
 
 -(id) init {
     self= [super init];
     if (self) {
+        NSError *error;
+        _unwantedRe = [NSRegularExpression regularExpressionWithPattern:kAHContentTagsToRemove options:NSRegularExpressionCaseInsensitive error:&error];
         _contentChunks = [NSMutableArray array];
     }
     return self;
@@ -49,7 +56,7 @@
     self = [self init];
     if (self) {
         _htmlString = str;
-        [self parse];
+        _contentTagsRe = [NSRegularExpression regularExpressionWithPattern:kAHContentTagsNames options:NSCaseInsensitiveSearch error:0];
     }
     return self;
 }
@@ -59,6 +66,8 @@
     self = [self init];
     if (self) {
         if (data) {
+            NSDate *startTime = [NSDate date];
+            
             NSInteger encodings[4] = {
                 NSUTF8StringEncoding,
                 NSASCIIStringEncoding,
@@ -69,111 +78,57 @@
             for( NSInteger i = 0; i < sizeof( encodings ) / sizeof( NSInteger ); i++ )
             {
                 if( ( _htmlString = [[NSString alloc] initWithData:data
-                                                         encoding:encodings[i]]  ) != nil )
+                                                          encoding:encodings[i]]  ) != nil )
                 {
                     break;
                 }
             }
-            [self parse];
             
+            _saxParser = [[AHSAXParser alloc] initWithDelegate:self];
+            [_saxParser end:_htmlString];
+            
+            NSLog(@"Time to parse content: %f", [[NSDate date] timeIntervalSinceDate:startTime] );
             
         }
     }
     return self;
 }
 
+#pragma mark - SAX Delegate method
 
-
--(void) parse {
-    
-    if  (!_htmlString) {
-        return;
-    }
-    
-    NSDate *startTime = [NSDate date];
-    AHContentTextChunk *currentChunk;
-    
-    // We don't parse things into a dom or html because it takes too long, and is really unreliable
-    // Instead we split the html into tokens and weight them heuristically according to html coding practices
-    
-   NSArray * lines = [_htmlString componentsSeparatedByCharactersInSet: [NSCharacterSet characterSetWithCharactersInString:@"<>"]];
-    for (int i =0; i< lines.count; i++) {
-        NSRange pRange = [lines[i] rangeOfString:@"p" options:NSCaseInsensitiveSearch];
-        if (pRange.location ==0  ) {
-            
-            // not a paragraph delimiter
-            if ([lines[i] length] > 1 && [lines[i] rangeOfString:@"=\""].location == NSNotFound) continue;
-            
-            NSString *text = lines[i+1];
-            text = [AHContentParser stringByStrippingHTML:text excludeRegEx:kAHContentTagsToKeep];
-            AHContentTextChunk *contentChunk = [[AHContentTextChunk alloc] init];
-            contentChunk.text = text;
-            [_contentChunks addObject:contentChunk];
-            if (currentChunk) {
-                contentChunk.previousChunk = currentChunk;
-                currentChunk.nextChunk = contentChunk;
-            }
-            currentChunk = contentChunk;
-            
-            self.foundContent = YES;
-            
-        }
-    }
-      
-    NSLog(@"Time to parse content: %f", [[NSDate date] timeIntervalSinceDate:startTime] );
-    
+-(void) onOpenTagName:(NSString *)tag {
+    NSLog(@"tag: %@", tag);
 }
 
 
-
-
--(NSString*) contentHTML {
-    
-    
-    if (_contentChunks.count > 0) {
-        
-        // Go through and output some very simple html
-        NSMutableString *html = [[NSMutableString alloc] init];
-        for (AHContentTextChunk* chunk in _contentChunks) {
-            if (chunk.text.length == 0) continue;
-            if (chunk.isQuote) {
-                [html appendFormat:@"<blockquote><p>%@</p></blockquote>", chunk.text];
-            } else {
-                [html appendFormat:@"<p>%@</p>", chunk.text];
-            }
-        }
-        return html;
-    }
-    return nil;
-}
 
 #pragma mark - Super Awesome NSString methods
 
--(NSString *) stringByStrippingHTMLFromString:(NSString*) str {
-    NSDate *startTime = [NSDate date];
-    NSRange r;
-    NSString *s = [str copy];
-    while ((r = [s rangeOfString:@"<[^>]+>" options:NSRegularExpressionSearch]).location != NSNotFound)
-        s = [s stringByReplacingCharactersInRange:r withString:@""];
-    NSLog(@"Time stringByStrippingHTMLFromString: %f", [[NSDate date] timeIntervalSinceDate:startTime] );
-    return s;
+
+
+-(NSString*)trim:(NSString*) str {
+    return [str stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
 }
 
-+ (NSString *)stringByStrippingHTML:(NSString *)inputString excludeRegEx:(NSString*) excludeRegEx;
+
+
++ (NSString *)stringByStrippingHTML:(NSString *)inputString includeRegEx:(NSString*)includeRegEx excludeRegEx:(NSString*) excludeRegEx;
 {
-    NSDate *startTime = [NSDate date];
+    //NSDate *startTime = [NSDate date];
     NSMutableString *outString;
     
     if (inputString)
     {
         
         outString = [[NSMutableString alloc] initWithString:inputString];
+        //remove all by default;
+        includeRegEx = includeRegEx ? includeRegEx : @"<[^>]+>";
         
         if ([inputString length] > 0)
         {
             NSRange r;
             NSRange searchRange = NSMakeRange(0, outString.length);
-            while ((r = [outString rangeOfString:@"<[^>]+>" options:NSRegularExpressionSearch range:searchRange]).location != NSNotFound)
+            while ((r = [outString rangeOfString:includeRegEx options:NSRegularExpressionSearch range:searchRange]).location != NSNotFound)
             {
                 NSString *textInQuestion = [outString substringWithRange:r];
                 if (!excludeRegEx || [textInQuestion rangeOfString:excludeRegEx options:NSRegularExpressionSearch].location == NSNotFound) {
@@ -187,9 +142,9 @@
             
             while ((r = [outString rangeOfString:@"<!--.*-->" options:NSRegularExpressionSearch]).location != NSNotFound)
             {
-                    [outString deleteCharactersInRange:r];
+                [outString deleteCharactersInRange:r];
             }
-
+            
         }
     }
     
@@ -198,7 +153,7 @@
 }
 
 + (int)countString:(NSString *)stringToCount inText:(NSString *)text{
-     NSDate *startTime = [NSDate date];
+    NSDate *startTime = [NSDate date];
     
     
     int foundCount=0;

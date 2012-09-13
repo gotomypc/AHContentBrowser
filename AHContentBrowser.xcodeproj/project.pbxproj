@@ -17,6 +17,7 @@
 		9A7DA72D15FE6813009F79DA /* AHContentBrowser.m in Sources */ = {isa = PBXBuildFile; fileRef = 9A7DA72C15FE6813009F79DA /* AHContentBrowser.m */; };
 		9A7DA72F15FE68C7009F79DA /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A7DA72E15FE68C7009F79DA /* WebKit.framework */; };
 		9A7DA73515FE6927009F79DA /* content.html in Resources */ = {isa = PBXBuildFile; fileRef = 9A7DA73415FE6927009F79DA /* content.html */; };
+		9AE22F8016023EF500019B72 /* AHSAXParser.m in Sources */ = {isa = PBXBuildFile; fileRef = 9AE22F7F16023EF500019B72 /* AHSAXParser.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -39,6 +40,8 @@
 		9A7DA72C15FE6813009F79DA /* AHContentBrowser.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AHContentBrowser.m; sourceTree = "<group>"; };
 		9A7DA72E15FE68C7009F79DA /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		9A7DA73415FE6927009F79DA /* content.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = content.html; sourceTree = "<group>"; };
+		9AE22F7E16023EF500019B72 /* AHSAXParser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AHSAXParser.h; sourceTree = "<group>"; };
+		9AE22F7F16023EF500019B72 /* AHSAXParser.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AHSAXParser.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -123,6 +126,8 @@
 				9A7DA72B15FE6813009F79DA /* AHContentBrowser.h */,
 				9A7DA72C15FE6813009F79DA /* AHContentBrowser.m */,
 				9A7DA73415FE6927009F79DA /* content.html */,
+				9AE22F7E16023EF500019B72 /* AHSAXParser.h */,
+				9AE22F7F16023EF500019B72 /* AHSAXParser.m */,
 			);
 			path = Classes;
 			sourceTree = "<group>";
@@ -197,6 +202,7 @@
 				9A7DA71915FE641A009F79DA /* AHAppDelegate.m in Sources */,
 				9A7DA72A15FE677F009F79DA /* AHContentParser.m in Sources */,
 				9A7DA72D15FE6813009F79DA /* AHContentBrowser.m in Sources */,
+				9AE22F8016023EF500019B72 /* AHSAXParser.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

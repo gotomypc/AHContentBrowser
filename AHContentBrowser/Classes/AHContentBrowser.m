@@ -46,7 +46,7 @@
     [[NSUserDefaults standardUserDefaults] setBool:TRUE forKey:@"WebKitDeveloperExtras"];
     [[NSUserDefaults standardUserDefaults] synchronize];
     
-    self.url = [NSURL URLWithString:@"http://content.usatoday.com/communities/ondeadline/post/2012/09/10/world-trade-cener/70000045/1?csp=ip#.UE9tNaTyZAM"];
+    self.url = [NSURL URLWithString:@"http://www.washingtonpost.com/world/us-embassy-in-yemen-stormed-other-embassies-still-under-siege/2012/09/13/ad65ce7e-fd9b-11e1-a31e-804fccb658f9_story.html"];
 }
 
 -(IBAction)searchFieldChanged:(id)sender {

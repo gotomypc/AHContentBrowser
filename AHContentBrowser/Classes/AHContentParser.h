@@ -7,8 +7,9 @@
 //
 
 #import <Foundation/Foundation.h>
+#import "AHSAXParser.h" 
 
-@interface AHContentParser : NSObject
+@interface AHContentParser : NSObject <AHSaxParserDelegate>
 
 
 @property (nonatomic, readonly) NSMutableArray *imageURLs;
