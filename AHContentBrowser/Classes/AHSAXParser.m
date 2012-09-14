@@ -88,13 +88,15 @@ typedef enum{
     if (_buffer) {
         [self parseTags:YES];
     }
-    
+    if ([_delegate respondsToSelector:@selector(onOpenTagName:)]) {
         while(_stack.count) {
-            [_delegate performSelector:@selector(onOpenTag:) withObject:[_stack lastObject]];
+            [_delegate onOpenTagName:[_stack lastObject]];
             [_stack removeLastObject];
         }
-    
+    }
+    if ([_delegate respondsToSelector:@selector(onEnd)]) {
         [_delegate onEnd];
+    }
 }
 
 -(void) pause {
@@ -124,8 +126,9 @@ typedef enum{
     _contentFlags = 0;
     _done = NO;
     _running = YES;
+    if ([_delegate respondsToSelector:@selector(onReset)]) {
         [_delegate performSelector:@selector(onReset)];
-    
+    }
 }
 
 //Extracts the base tag name from the data value of an element
@@ -199,9 +202,11 @@ typedef enum{
                 }
                 [self processCloseTag:elementData];
             } else if ([[elementData substringToIndex:1] isEqualToString:@"!"]) {
-                if ([[elementData substringWithRange:NSMakeRange(1, 7)] isEqualToString:@"[CDATA["]) {
+                if (elementData.length > 7 && [[elementData substringWithRange:NSMakeRange(1, 7)] isEqualToString:@"[CDATA["]) {
                     _contentFlags |= AHSAXSpecialTagCDATA;
+                    if ([_delegate respondsToSelector:@selector(onCDATAStart)]) {
                         [_delegate onCDATAStart];
+                    }
                     [self writeCDATA:[elementData substringFromIndex:8]];
                 } else if (_contentFlags != 0) {
                     [self writeSpecial:rawData lastTagSep:lastTagSep];
@@ -231,7 +236,9 @@ typedef enum{
                     // it is the second > in a row
                     rawData = [rawData stringByAppendingString:@">"];
                 }
-                [_delegate onText:rawData];
+                if ([_delegate respondsToSelector:@selector(onText:)]) {
+                    [_delegate onText:rawData];
+                }
             }
         }
         
@@ -242,26 +249,23 @@ typedef enum{
 
 
 -(void) writeCDATA:(NSString*) data {
-    if ([_tagSep isEqualToString:@">"] && [[data substringToIndex:data.length-2] isEqualToString:@"]]"]) {
+    if ([_tagSep isEqualToString:@">"] && [[data substringFromIndex:data.length-2] isEqualToString:@"]]"]) {
         // CDATA ends
         if (data.length != 2 && [_delegate respondsToSelector:@selector(onText:)] ) {
-            [_delegate performSelector:@selector(onText:) withObject:[data substringToIndex:data.length-2]];
+            [_delegate onText:[data substringToIndex:data.length-2]];
         }
         _contentFlags ^= AHSAXSpecialTagCDATA;
         if ([_delegate respondsToSelector:@selector(onCDATAEnd)]) {
             [_delegate performSelector:@selector(onCDATAEnd)];
         }
     } else if ([_delegate respondsToSelector:@selector(onText:)]) {
-        [_delegate performSelector:@selector(onText:) withObject:[data stringByAppendingString:_tagSep]];
+        [_delegate onText:[data stringByAppendingString:_tagSep]];
     }
 }
 
 
 -(void) writeComment:(NSString*) rawData {
-    if (!rawData || !rawData.length) {
-        NSLog(@"");
-    }
-    if ([_tagSep isEqualToString:@">"] && [[rawData substringToIndex:rawData.length-2] isEqualToString:@"--"]) {
+    if (rawData && [_tagSep isEqualToString:@">"] && [[rawData substringFromIndex:rawData.length-2] isEqualToString:@"--"]) {
         // comment ends
         // remove the written flag (also remove the comment flag)
         _contentFlags ^= AHSAXSpecialTagComment;
@@ -352,18 +356,23 @@ typedef enum{
     else if ([name isEqualToString:@"script"]) type = AHSAXParserElementTypeScript;
     else if ([name isEqualToString:@"style"]) type = AHSAXParserElementTypeStyle;
     
+    if ([_delegate respondsToSelector:@selector(onOpenTagName:)]) {
         [_delegate onOpenTagName:name];
+    }
     //todo add onOpenTag delegate call
     
     if ([_delegate respondsToSelector:@selector(onAttributeName:value:)]) {
         [self parseAttributesFromData:data lowerCaseNames:self.useLowerCaseAttributeNames];
     }
     
+    if ([_delegate respondsToSelector:@selector(onOpenTagEnd)]) {
         [_delegate onOpenTagEnd];
-    
+    }
     
     if ([[data substringToIndex:data.length-1] isEqualToString:@"/"] || ([_emptyTags containsObject:name] && !self.shouldParseAsXML)) {
-            [_delegate performSelector:@selector(onCloseTag:) withObject:name];
+        if ([_delegate respondsToSelector:@selector(onCloseTag:)]) {
+            [_delegate onCloseTag:name];
+        }
     } else {
         if (type != AHSAXParserElementTypeTag) {
             _contentFlags |= [self specialTagLookup:type];

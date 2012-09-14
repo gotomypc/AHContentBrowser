@@ -2,6 +2,9 @@
 //  AHSAXParser.h
 //  AHContentBrowser
 //
+//  This is a direct port of https://github.com/fb55/node-htmlparser by Felix Böhm.
+//  Many thanks to him for this very fast, simple and forgiving html parser
+//
 //  Created by John Wright on 9/13/12.
 //  Copyright (c) 2012 John Wright. All rights reserved.
 //

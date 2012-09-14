@@ -40,6 +40,7 @@
     NSRegularExpression *_contentTagsRe;
     NSRegularExpression *_unwantedRe;
     AHSAXParser *_saxParser;
+    NSInteger numPs;
 }
 
 -(id) init {
@@ -98,24 +99,13 @@
 
 
 
--(void) onCDATAStart {
-    
-}
--(void) onCDATAEnd {
-    
-}
--(void) onComment:(NSString*) comment{
-    
-}
--(void) onCommentEnd{
-    
-}
+
 -(void) onOpenTagName:(NSString*)tag{
-    
+    if ([tag isEqualToString:@"p"]) {
+        numPs++;
+    }
 }
--(void) onOpenTagEnd{
-    
-}
+
 -(void) onAttributeName:(NSString*)name value:(NSString*) value{
     
 }
@@ -125,17 +115,11 @@
 -(void) onError{
     
 }
--(void) onProcessingInstruction:(NSString*) processingInstruction elementData:(NSString*) elementData{
-    
-}
--(void) onReset{
-    
-}
 -(void) onText:(NSString*) text{
     
 }
 -(void) onEnd{
-    
+    NSLog(@"Found %ld, paragraphs", numPs);
 }
 
 
