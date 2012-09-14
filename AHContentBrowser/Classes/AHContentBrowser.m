@@ -46,7 +46,7 @@
     [[NSUserDefaults standardUserDefaults] setBool:TRUE forKey:@"WebKitDeveloperExtras"];
     [[NSUserDefaults standardUserDefaults] synchronize];
     
-    self.url = [NSURL URLWithString:@"http://www.washingtonpost.com/world/us-embassy-in-yemen-stormed-other-embassies-still-under-siege/2012/09/13/ad65ce7e-fd9b-11e1-a31e-804fccb658f9_story.html"];
+    self.url = [NSURL URLWithString:@"http://latimesblogs.latimes.com/world_now/2012/09/death-toll-ticks-higher-as-protests-rage-over-insulting-movie.html"];
 }
 
 -(IBAction)searchFieldChanged:(id)sender {
@@ -64,12 +64,15 @@
     [NSURLConnection sendAsynchronousRequest:[NSURLRequest requestWithURL:_url] queue:[NSOperationQueue mainQueue] completionHandler:^(NSURLResponse *res, NSData *data, NSError *e) {
         
         
+        NSTimeInterval downloadTime = [[NSDate date] timeIntervalSinceDate:startTime];
+        NSLog(@"Time to download: %f", downloadTime);
         contentParser = [[AHContentParser alloc] initWithData:data handler:^(AHContentParser *parser) {
             //Extract the body
-            if (parser.foundContent) {
+            NSString *contentHTML = parser.contentHTML;
+            if (contentHTML) {
                 
                 //Load the readable  webview
-                NSString *htmlString  = [templateString stringByReplacingOccurrencesOfString:@"<readableTemplate/>" withString:parser.contentHTML];
+                NSString *htmlString  = [templateString stringByReplacingOccurrencesOfString:@"<readableTemplate/>" withString:contentHTML];
                 NSString *path = [[NSBundle mainBundle] bundlePath];
                 NSURL *baseURL = [NSURL fileURLWithPath:path];
                 [[self mainFrame] loadHTMLString:htmlString baseURL:baseURL];

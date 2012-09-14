@@ -175,7 +175,7 @@ typedef enum{
         // the next chunk of data to parse
         rawData = [_buffer substringWithRange:NSMakeRange(current, MAX(next-current, 0))];
         
-        
+           
         // set elements for next run
         current =  next + 1;
         
@@ -265,7 +265,7 @@ typedef enum{
 
 
 -(void) writeComment:(NSString*) rawData {
-    if (rawData && [_tagSep isEqualToString:@">"] && [[rawData substringFromIndex:rawData.length-2] isEqualToString:@"--"]) {
+    if (rawData && rawData.length > 2 && [_tagSep isEqualToString:@">"] && [[rawData substringFromIndex:rawData.length-2] isEqualToString:@"--"]) {
         // comment ends
         // remove the written flag (also remove the comment flag)
         _contentFlags ^= AHSAXSpecialTagComment;
@@ -331,15 +331,21 @@ typedef enum{
     
     NSArray *results = [_reAttrib matchesInString:data options:0 range:NSMakeRange(0, data.length)];
     for (NSTextCheckingResult *res in results) {
-        NSString *attributeName = [data substringWithRange:[res rangeAtIndex:0]];
+        if (res.numberOfRanges <= 1) {
+            continue;
+        }
+        NSString *attributeName = [data substringWithRange:[res rangeAtIndex:1]];
         if (useLowerCaseNames) {
             attributeName = [attributeName lowercaseString];
         }
         NSString *attribVal;
-        for (NSUInteger i=1; i < res.numberOfRanges; i++) {
-            attribVal = attribVal ? attribVal : [data substringWithRange:[res rangeAtIndex:i]];
-            if (attribVal) {
-                break;
+        for (NSUInteger i=2; i < res.numberOfRanges; i++) {
+            NSRange nextRange = [res rangeAtIndex:i];
+            if (nextRange.location + nextRange.length< data.length) {
+                attribVal = attribVal ? attribVal : [data substringWithRange:[res rangeAtIndex:i]];
+                if (attribVal) {
+                    break;
+                }
             }
         }
         attribVal = attribVal ? attribVal : @"";

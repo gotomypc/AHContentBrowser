@@ -43,6 +43,7 @@
     NSInteger _numPs;
     AHContentTextChunk *_currentChunk;
     AHContentParserHandler _handler;
+    NSMutableString *_html;
 }
 
 -(id) init {
@@ -69,6 +70,7 @@
     self = [self init];
     if (self) {
         _handler = [handler copy];
+        _html = [[NSMutableString alloc] init];
         if (data) {
             NSDate *startTime = [NSDate date];
             
@@ -115,34 +117,46 @@
         }
         return html;
     }
+    return nil;
 }
 
 
 #pragma mark - SAX Delegate method
 
 
-
-
 -(void) onOpenTagName:(NSString*)tag{
     if ([tag isEqualToString:@"p"]) {
         _currentChunk = [[AHContentTextChunk alloc] init];
         _currentChunk.elementName = tag;
+        _numPs++;
     }
+    [_html appendFormat:@"<%@", tag];
+}
+
+
+-(void) onOpenTagEnd {
+    [_html appendString:@">"];
+    
 }
 
 -(void) onAttributeName:(NSString*)name value:(NSString*) value{
-    
+    [_html appendFormat:@" %@=\"%@\"", name, value];
+
 }
 -(void) onText:(NSString*) text{
     if (_currentChunk) {
         _currentChunk.text = text;
     }
+    [_html appendString:text];
 }
 
 -(void) onCloseTag:(NSString*)tag{
     if ([tag isEqualToString:@"p"] && _currentChunk) {
         [_contentChunks addObject:_currentChunk];
+        _currentChunk = nil;
     }
+    [_html appendFormat:@"</%@>", tag];
+
 }
 
 -(void) onError{
@@ -151,6 +165,7 @@
 -(void) onEnd{
     self.foundContent = YES;
     NSLog(@"Found %ld, paragraphs", _numPs);
+    NSLog(@"%@", _html);
     if (_handler) {
         _handler(self);
     }
