@@ -96,8 +96,46 @@
 
 #pragma mark - SAX Delegate method
 
--(void) onOpenTagName:(NSString *)tag {
-    NSLog(@"tag: %@", tag);
+
+
+-(void) onCDATAStart {
+    
+}
+-(void) onCDATAEnd {
+    
+}
+-(void) onComment:(NSString*) comment{
+    
+}
+-(void) onCommentEnd{
+    
+}
+-(void) onOpenTagName:(NSString*)tag{
+    
+}
+-(void) onOpenTagEnd{
+    
+}
+-(void) onAttributeName:(NSString*)name value:(NSString*) value{
+    
+}
+-(void) onCloseTag:(NSString*)tag{
+    
+}
+-(void) onError{
+    
+}
+-(void) onProcessingInstruction:(NSString*) processingInstruction elementData:(NSString*) elementData{
+    
+}
+-(void) onReset{
+    
+}
+-(void) onText:(NSString*) text{
+    
+}
+-(void) onEnd{
+    
 }
 
 

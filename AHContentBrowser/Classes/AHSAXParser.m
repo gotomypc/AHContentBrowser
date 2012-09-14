@@ -89,16 +89,12 @@ typedef enum{
         [self parseTags:YES];
     }
     
-    if ([_delegate respondsToSelector:@selector(onOpenTag:)]) {
         while(_stack.count) {
             [_delegate performSelector:@selector(onOpenTag:) withObject:[_stack lastObject]];
             [_stack removeLastObject];
         }
-    }
     
-    if ([_delegate respondsToSelector:@selector(onEnd)]) {
-        [_delegate performSelector:@selector(onEnd)];
-    }
+        [_delegate onEnd];
 }
 
 -(void) pause {
@@ -128,9 +124,7 @@ typedef enum{
     _contentFlags = 0;
     _done = NO;
     _running = YES;
-    if ([_delegate respondsToSelector:@selector(onReset)]) {
         [_delegate performSelector:@selector(onReset)];
-    }
     
 }
 
@@ -140,8 +134,8 @@ typedef enum{
     NSTextCheckingResult *res = [_reTail firstMatchInString:data options:NSCaseInsensitiveSearch range:NSMakeRange(0, data.length)];
     
     if (res) {
-        NSString *match = [data substringWithRange:res.range];
-        if (self.useLowerCaseTags) {
+        NSString *match = [data substringWithRange:NSMakeRange(0,res.range.location)];
+        if (!self.useLowerCaseTags) {
             return match;
         }
         return [match lowercaseString];
@@ -154,7 +148,7 @@ typedef enum{
     NSInteger opening = [_buffer rangeOfString:@"<"].location;
     NSInteger closing = [_buffer rangeOfString:@">"].location;
     NSInteger next;
-    NSMutableString *rawData;
+    NSString *rawData;
     NSString *elementData;
     NSString *lastTagSep;
     
@@ -168,14 +162,15 @@ typedef enum{
         if ((opening != -1 && opening < closing) || closing == -1) {
             next = opening;
             _tagSep = @"<";
-            opening = [_buffer rangeOfString:@"<" options:0 range:NSMakeRange(next+1, _buffer.length-next+1)].location;
+            opening = [_buffer rangeOfString:@"<" options:0 range:NSMakeRange(next+1, _buffer.length-next-1)].location;
             
         } else {
             next = closing;
             _tagSep = @">";
-            closing = [_buffer rangeOfString:@">" options:0 range:NSMakeRange(next+1, _buffer.length-next+1)].location;
+            closing = [_buffer rangeOfString:@">" options:0 range:NSMakeRange(next+1, _buffer.length-next-1)].location;
         }
-        rawData = [[_buffer substringWithRange:NSMakeRange(current, _buffer.length - next +1)] mutableCopy];
+        // the next chunk of data to parse
+        rawData = [_buffer substringWithRange:NSMakeRange(current, MAX(next-current, 0))];
         
         
         // set elements for next run
@@ -190,7 +185,7 @@ typedef enum{
         } else if ([lastTagSep isEqualToString:@"<"]) {
             elementData = [self trimLeft:rawData];
             if ([[elementData substringToIndex:1] isEqualToString:@"/"]) {
-                elementData = [self parseTagName:[elementData substringToIndex:1]];
+                elementData = [self parseTagName:[elementData substringFromIndex:1]];
                 if (_contentFlags != 0) {
                     // if it's a closing tag, remove the flag
                     if (_contentFlags && [self tagValue:elementData]) {
@@ -204,17 +199,26 @@ typedef enum{
                 }
                 [self processCloseTag:elementData];
             } else if ([[elementData substringToIndex:1] isEqualToString:@"!"]) {
+                if ([[elementData substringWithRange:NSMakeRange(1, 7)] isEqualToString:@"[CDATA["]) {
+                    _contentFlags |= AHSAXSpecialTagCDATA;
+                        [_delegate onCDATAStart];
+                    [self writeCDATA:[elementData substringFromIndex:8]];
+                } else if (_contentFlags != 0) {
+                    [self writeSpecial:rawData lastTagSep:lastTagSep];
+                }  else if ([[elementData substringWithRange:NSMakeRange(1, 2)] isEqualToString:@"--"]) {
+                    // This tag is a  comment
+                    _contentFlags |= AHSAXSpecialTagComment;
+                    [self writeComment:[elementData substringFromIndex:3]];
+                } else if ([_delegate respondsToSelector:@selector(onProcessingInstruction:elementData:)]) {
+                    [_delegate performSelector:@selector(onProcessingInstruction:elementData:) withObject:[NSString stringWithFormat:@"?%@", [self parseTagName:[elementData substringFromIndex:1]]] withObject:elementData];
+                }
                 
-            }
-            
-            
-            else if ([[elementData substringWithRange:NSMakeRange(1, 1)] isEqualToString:@"--"]) {
-                // This tag is a  comment
-                _contentFlags |= AHSAXSpecialTagComment;
-                [self writeComment:[elementData substringToIndex:3]];
-            } else if ([_delegate respondsToSelector:@selector(onProcessingInstruction:elementData:)]) {
-                [_delegate performSelector:@selector(onProcessingInstruction:elementData:) withObject:[NSString stringWithFormat:@"!%@", [elementData substringToIndex:1]] withObject:elementData];
-                
+            } else if (_contentFlags !=0 ) {
+                [self writeSpecial:rawData lastTagSep:lastTagSep];
+            } else if ([[elementData substringToIndex:1] isEqualToString:@"?"]) {
+                if ([_delegate respondsToSelector:@selector(onProcessingInstruction:elementData:)]) {
+                    [_delegate performSelector:@selector(onProcessingInstruction:elementData:) withObject:[NSString stringWithFormat:@"?%@", [self parseTagName:[elementData substringFromIndex:1]]] withObject:elementData];
+                }
             } else {
                 [self processOpenTag:elementData];
             }
@@ -225,20 +229,20 @@ typedef enum{
             } else if (![rawData isEqualToString:@""] && [_delegate respondsToSelector:@selector(onText:)]) {
                 if ([_tagSep isEqualToString:@">"]) {
                     // it is the second > in a row
-                    [rawData appendString:@">"];
+                    rawData = [rawData stringByAppendingString:@">"];
                 }
-                [_delegate performSelector:@selector(onText:) withObject:rawData];
+                [_delegate onText:rawData];
             }
         }
         
     }
-    _buffer = [[_buffer substringToIndex:current] mutableCopy];
+    _buffer = [[_buffer substringFromIndex:current] mutableCopy];
     
 }
 
 
 -(void) writeCDATA:(NSString*) data {
-    if ([_tagSep isEqualToString:@">"] && [[data substringFromIndex:2] isEqualToString:@"]]"]) {
+    if ([_tagSep isEqualToString:@">"] && [[data substringToIndex:data.length-2] isEqualToString:@"]]"]) {
         // CDATA ends
         if (data.length != 2 && [_delegate respondsToSelector:@selector(onText:)] ) {
             [_delegate performSelector:@selector(onText:) withObject:[data substringToIndex:data.length-2]];
@@ -254,7 +258,11 @@ typedef enum{
 
 
 -(void) writeComment:(NSString*) rawData {
-    if ([_tagSep isEqualToString:@">"] && [[rawData substringFromIndex:2] isEqualToString:@"--"]) {
+    if (!rawData || !rawData.length) {
+        NSLog(@"");
+    }
+    if ([_tagSep isEqualToString:@">"] && [[rawData substringToIndex:rawData.length-2] isEqualToString:@"--"]) {
+        // comment ends
         // remove the written flag (also remove the comment flag)
         _contentFlags ^= AHSAXSpecialTagComment;
         _wroteSpecial = NO;
@@ -281,7 +289,7 @@ typedef enum{
         //The previous element was not text
         _wroteSpecial = YES;
         if (![rawData isEqualToString:@""] && [_delegate respondsToSelector:@selector(onText:)]) {
-            [self performSelector:@selector(onText:) withObject:rawData];
+            [_delegate onText:rawData];
         }
     }
 }
@@ -293,7 +301,7 @@ typedef enum{
             if ([_delegate respondsToSelector:@selector(onCloseTag:)]) {
                 pos = _stack.count - pos;
                 while (pos--) {
-                    [self performSelector:@selector(onCloseTag:) withObject:[_stack lastObject]];
+                    [_delegate onCloseTag:[_stack lastObject]];
                     [_stack removeLastObject];
                 }
             } else {
@@ -307,7 +315,7 @@ typedef enum{
 }
 
 -(NSInteger) lastIndexOfString:(NSString*)string inArray:(NSArray*) array {
-    for (NSUInteger i = array.count; i>0;i--) {
+    for (NSInteger i = array.count-1; i>=0;i--) {
         if ([array[i] isEqualToString:string]) {
             return i;
         }
@@ -317,22 +325,22 @@ typedef enum{
 
 -(void) parseAttributesFromData:(NSString*) data lowerCaseNames:(BOOL) useLowerCaseNames {
     
-        NSArray *results = [_reAttrib matchesInString:data options:0 range:NSMakeRange(0, data.length)];
-        for (NSTextCheckingResult *res in results) {
-            NSString *attributeName = [data substringWithRange:[res rangeAtIndex:0]];
-            if (useLowerCaseNames) {
-                attributeName = [attributeName lowercaseString];
-            }
-            NSString *attribVal;
-            for (NSUInteger i=1; i < res.numberOfRanges; i++) {
-                attribVal = attribVal ? attribVal : [data substringWithRange:[res rangeAtIndex:i]];
-                if (attribVal) {
-                    break;
-                }
-            }
-            attribVal = attribVal ? attribVal : @"";
-            [_delegate onAttributeName:attributeName value:attribVal];
+    NSArray *results = [_reAttrib matchesInString:data options:0 range:NSMakeRange(0, data.length)];
+    for (NSTextCheckingResult *res in results) {
+        NSString *attributeName = [data substringWithRange:[res rangeAtIndex:0]];
+        if (useLowerCaseNames) {
+            attributeName = [attributeName lowercaseString];
         }
+        NSString *attribVal;
+        for (NSUInteger i=1; i < res.numberOfRanges; i++) {
+            attribVal = attribVal ? attribVal : [data substringWithRange:[res rangeAtIndex:i]];
+            if (attribVal) {
+                break;
+            }
+        }
+        attribVal = attribVal ? attribVal : @"";
+        [_delegate onAttributeName:attributeName value:attribVal];
+    }
     
 }
 
@@ -344,23 +352,18 @@ typedef enum{
     else if ([name isEqualToString:@"script"]) type = AHSAXParserElementTypeScript;
     else if ([name isEqualToString:@"style"]) type = AHSAXParserElementTypeStyle;
     
-    if ([_delegate performSelector:@selector(onOpenTagName:)]) {
         [_delegate onOpenTagName:name];
-    }
+    //todo add onOpenTag delegate call
     
-    if ([_delegate performSelector:@selector(onAttributeName:value:)]) {
+    if ([_delegate respondsToSelector:@selector(onAttributeName:value:)]) {
         [self parseAttributesFromData:data lowerCaseNames:self.useLowerCaseAttributeNames];
     }
     
-    if ([_delegate performSelector:@selector(onOpenTagEnd)]) {
         [_delegate onOpenTagEnd];
-    }
     
     
-    if ([[data substringToIndex:data.length-1] isEqualToString:@"/"] || ([_emptyTags containsObject:name] && self.shouldParseAsXML)) {
-        if ([_delegate performSelector:@selector(onCloseTag:)]) {
+    if ([[data substringToIndex:data.length-1] isEqualToString:@"/"] || ([_emptyTags containsObject:name] && !self.shouldParseAsXML)) {
             [_delegate performSelector:@selector(onCloseTag:) withObject:name];
-        }
     } else {
         if (type != AHSAXParserElementTypeTag) {
             _contentFlags |= [self specialTagLookup:type];
