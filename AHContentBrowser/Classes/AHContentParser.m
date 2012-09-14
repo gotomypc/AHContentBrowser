@@ -165,16 +165,14 @@
 -(void) onEnd{
     self.foundContent = YES;
     NSLog(@"Found %ld, paragraphs", _numPs);
-    NSLog(@"%@", _html);
+    //NSLog(@"%@", _html);
     if (_handler) {
         _handler(self);
     }
 }
 
 
-
 #pragma mark - Super Awesome NSString methods
-
 
 
 -(NSString*)trim:(NSString*) str {
