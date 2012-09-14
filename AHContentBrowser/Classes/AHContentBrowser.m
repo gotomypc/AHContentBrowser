@@ -64,22 +64,22 @@
     [NSURLConnection sendAsynchronousRequest:[NSURLRequest requestWithURL:_url] queue:[NSOperationQueue mainQueue] completionHandler:^(NSURLResponse *res, NSData *data, NSError *e) {
         
         
-        contentParser = [[AHContentParser alloc] initWithData:data];
+        contentParser = [[AHContentParser alloc] initWithData:data handler:^(AHContentParser *parser) {
+            //Extract the body
+            if (parser.foundContent) {
+                
+                //Load the readable  webview
+                NSString *htmlString  = [templateString stringByReplacingOccurrencesOfString:@"<readableTemplate/>" withString:parser.contentHTML];
+                NSString *path = [[NSBundle mainBundle] bundlePath];
+                NSURL *baseURL = [NSURL fileURLWithPath:path];
+                [[self mainFrame] loadHTMLString:htmlString baseURL:baseURL];
+                
+                NSTimeInterval textTime = [[NSDate date] timeIntervalSinceDate:startTime];
+                timeTextLabel.stringValue = [NSString stringWithFormat:@"Time: %f", textTime];
+                
+            }
+        }];
         
-        //Extract the body
-        if (contentParser.foundContent) {
-            
-            //Load the readable  webview
-            NSString *htmlString  = [templateString stringByReplacingOccurrencesOfString:@"<readableTemplate/>" withString:contentParser.contentHTML];
-            NSString *path = [[NSBundle mainBundle] bundlePath];
-            NSURL *baseURL = [NSURL fileURLWithPath:path];
-            [[self mainFrame] loadHTMLString:htmlString baseURL:baseURL];
-            
-            NSTimeInterval textTime = [[NSDate date] timeIntervalSinceDate:startTime];
-            timeTextLabel.stringValue = [NSString stringWithFormat:@"Time: %f", textTime];
-            
-
-        }
     }];
 
 }

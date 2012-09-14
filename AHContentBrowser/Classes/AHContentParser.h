@@ -9,6 +9,10 @@
 #import <Foundation/Foundation.h>
 #import "AHSAXParser.h" 
 
+
+@class AHContentParser;
+typedef void(^AHContentParserHandler)(AHContentParser *parser);
+
 @interface AHContentParser : NSObject <AHSaxParserDelegate>
 
 
@@ -17,7 +21,7 @@
 @property (nonatomic) BOOL foundContent;
 
 //- (id) initWithURL:(NSURL*) url;
-- (id) initWithData:(NSData*) data;
+- (id) initWithData:(NSData*) data handler:(AHContentParserHandler) handler;
 - (id) initWithString:(NSString*) str;
 //- (id) initWithString:(NSString*) string;
 

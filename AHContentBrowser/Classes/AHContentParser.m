@@ -40,7 +40,9 @@
     NSRegularExpression *_contentTagsRe;
     NSRegularExpression *_unwantedRe;
     AHSAXParser *_saxParser;
-    NSInteger numPs;
+    NSInteger _numPs;
+    AHContentTextChunk *_currentChunk;
+    AHContentParserHandler _handler;
 }
 
 -(id) init {
@@ -63,9 +65,10 @@
 }
 
 
-- (id) initWithData:(NSData*) data {
+- (id) initWithData:(NSData*) data handler:(AHContentParserHandler)handler {
     self = [self init];
     if (self) {
+        _handler = [handler copy];
         if (data) {
             NSDate *startTime = [NSDate date];
             
@@ -95,6 +98,26 @@
     return self;
 }
 
+-(NSString*) contentHTML {
+    
+    
+    if (_contentChunks.count > 0) {
+        
+        // Go through and output some very simple html
+        NSMutableString *html = [[NSMutableString alloc] init];
+        for (AHContentTextChunk* chunk in _contentChunks) {
+            if (chunk.text.length == 0) continue;
+            if (chunk.isQuote) {
+                [html appendFormat:@"<blockquote><p>%@</p></blockquote>", chunk.text];
+            } else {
+                [html appendFormat:@"<p>%@</p>", chunk.text];
+            }
+        }
+        return html;
+    }
+}
+
+
 #pragma mark - SAX Delegate method
 
 
@@ -102,24 +125,35 @@
 
 -(void) onOpenTagName:(NSString*)tag{
     if ([tag isEqualToString:@"p"]) {
-        numPs++;
+        _currentChunk = [[AHContentTextChunk alloc] init];
+        _currentChunk.elementName = tag;
     }
 }
 
 -(void) onAttributeName:(NSString*)name value:(NSString*) value{
     
 }
--(void) onCloseTag:(NSString*)tag{
-    
+-(void) onText:(NSString*) text{
+    if (_currentChunk) {
+        _currentChunk.text = text;
+    }
 }
+
+-(void) onCloseTag:(NSString*)tag{
+    if ([tag isEqualToString:@"p"] && _currentChunk) {
+        [_contentChunks addObject:_currentChunk];
+    }
+}
+
 -(void) onError{
     
 }
--(void) onText:(NSString*) text{
-    
-}
 -(void) onEnd{
-    NSLog(@"Found %ld, paragraphs", numPs);
+    self.foundContent = YES;
+    NSLog(@"Found %ld, paragraphs", _numPs);
+    if (_handler) {
+        _handler(self);
+    }
 }
 
 
