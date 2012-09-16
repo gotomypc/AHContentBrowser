@@ -22,7 +22,6 @@ typedef void(^AHContentParserHandler)(AHContentParser *parser);
 
 //- (id) initWithURL:(NSURL*) url;
 - (id) initWithData:(NSData*) data handler:(AHContentParserHandler) handler;
-- (id) initWithString:(NSString*) str;
 //- (id) initWithString:(NSString*) string;
 
 //- (NSArray*) imageURLsLargerThanSize:(CGSize) size;

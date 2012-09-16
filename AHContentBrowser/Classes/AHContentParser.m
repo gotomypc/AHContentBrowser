@@ -1,4 +1,4 @@
-    //
+//
 //  AHContentParser.m
 //  AHContentBrowser
 //
@@ -13,54 +13,166 @@
 #define kAHContentTagsToKeep @"</?(?i:br|strong|ul|a|img|p)(.|\n)*?>"
 #define kAHContentTagsToRemove @"script"
 
-@interface AHContentTextChunk : NSObject
 
-@property (nonatomic) NSString *text;
-@property (nonatomic) NSString *elementName;
-@property (nonatomic) BOOL isQuote;
-@property (nonatomic) NSInteger index;
-@property (nonatomic, weak) AHContentTextChunk *previousChunk;
-@property (nonatomic, weak) AHContentTextChunk *nextChunk;
+@interface AHContentElement : NSObject
+
+@property (nonatomic) NSString* name;
+@property (nonatomic, weak) AHContentElement *parent;
+@property (nonatomic) NSMutableDictionary *attributes;
+@property (nonatomic) NSMutableArray *children;
+@property (nonatomic) NSInteger tagScore;
+@property (nonatomic) NSInteger attributeScore;
+@property (nonatomic) NSInteger totalScore;
+@property (nonatomic) NSMutableString *elementData;
+
+// Info properties
+@property (nonatomic) NSInteger *textLength;
+@property (nonatomic) NSInteger *linkLength;
+@property (nonatomic) NSInteger *commas;
+@property (nonatomic) NSInteger *density;
+@property (nonatomic) NSMutableDictionary *tagCount;
+
+@property (nonatomic) BOOL isCandidate;
+
+@property (nonatomic, readonly) NSString *outerHTML;
+@property (nonatomic, readonly) NSString *innerHTML;
 
 @end
 
-@implementation AHContentTextChunk
+@implementation AHContentElement
+
+-(id) initWithTagName:(NSString*) tagName parent:(AHContentElement*) parent {
+    self = [super init];
+    if (self) {
+        self.name = tagName;
+        self.parent = parent;
+        self.children = [NSMutableArray array];
+        self.attributes = [NSMutableDictionary dictionary];
+        self.tagScore = 0;
+        self.attributeScore = 0;
+        self.elementData = [[NSMutableString alloc] init];
+        self.textLength = 0;
+        self.linkLength = 0;
+        self.commas = 0;
+        self.density = 0;
+        self.tagCount = 0;
+        self.isCandidate = NO;
+    }
+    return self;
+}
+
+-(NSString*) innerHTML {
+    NSMutableString *ret = [[NSMutableString alloc] init];
+    for (NSUInteger i=0,j= self.children.count; i< j; i++) {
+        id child = self.children[i];
+        if ([child isKindOfClass:[NSString class]]) {
+            [ret appendString:child];
+        } else {
+            [ret appendString:[child outerHTML]];
+        }
+    }
+    return ret;
+}
+
+
+-(NSString*) outerHTML {
+    NSMutableString *ret = [[NSMutableString alloc] initWithFormat:@"<%@", self.name];
+    for (NSString *attribute in self.attributes.allKeys) {
+        [ret appendFormat:@" %@=\"%@\"", attribute, [self.attributes objectForKey:attribute]];
+    }
+    
+    if  (self.children.count == 0) {
+        if  ([@[@"br", @"hr"] containsObject:self.name]) {
+            return [ret stringByAppendingString:@"/>"];
+        } else {
+            return [ret stringByAppendingFormat:@"></%@>", self.name];
+        }
+    }
+    
+    return [ret stringByAppendingFormat:@">%@</%@>", self.innerHTML, self.name];
+    
+    
+}
+
 
 -(NSString*) description {
-    return [NSString stringWithFormat:@"%@", self.text];
+    return [NSString stringWithFormat:@"%@", self.name];
 }
 @end
 
 
-@implementation AHContentParser
-{
-    int numConsectiveReadableElements;
-    NSMutableArray *_contentChunks;
-    NSString *_htmlString;
-    NSRegularExpression *_contentTagsRe;
-    NSRegularExpression *_unwantedRe;
-    AHSAXParser *_saxParser;
-    NSInteger _numPs;
-    AHContentTextChunk *_currentChunk;
+@implementation AHContentParser {
     AHContentParserHandler _handler;
-    NSMutableString *_html;
+    NSString *_htmlString;
+    AHSAXParser *_saxParser;
+    
+    NSMutableArray *_paragraphs;
+    
+    AHContentElement* _currentElement;
+    AHContentElement* _topCandidate;
+    NSString *_origTitle;
+    NSString *_headerTitle;
+    NSMutableDictionary *_scannedLinks;
+    
+    
+    NSArray *_tagsToSkip;
+    NSDictionary *_tagCounts;
+    NSArray *_removeIfEmpty;
+    NSArray *_embeds;
+    NSArray *_goodAttributes;
+    NSArray *_cleanConditionally;
+    NSArray  *_unpackDivs;
+    NSArray *_noContent;
+    NSArray *_formatTags;
+    NSArray *_headerTags;
+    NSArray *_newLinesAfter;
+    
+    NSArray *_divToPElements;
+    NSArray *_okIfEmpty;
+    
+    NSRegularExpression *_reVideos;
+    NSRegularExpression *_reNextLink;
+    NSRegularExpression *_rePrevLink;
+    NSRegularExpression *_reExtraneous;
+    NSRegularExpression *_rePages;
+    NSRegularExpression *_rePageNum;
+    
+    NSRegularExpression *_reSafe;
+    NSRegularExpression *_reFinal;
+    
+    NSRegularExpression *_rePositive;
+    NSRegularExpression *_reNegative;
+    NSRegularExpression *_reUnlikelyCandidates;
+    NSRegularExpression *_reOKMaybeItsACandidate;
+    
+    NSRegularExpression *_reSentence;
+    NSRegularExpression *_reWhitespace;
+    
+    NSRegularExpression *_rePageInURL;
+    NSRegularExpression *_reBadFirst;
+    NSRegularExpression *_reNoLetters;
+    NSRegularExpression *_reParams;
+    NSRegularExpression *_reExtension;
+    NSRegularExpression *_reDigits;
+    NSRegularExpression *_reJustDigits;
+    NSRegularExpression *_reSlashes;
+    NSRegularExpression *_reDomain;
+    
+    
+    NSRegularExpression *_reProtocol;
+    NSRegularExpression *_reCleanPaths;
+    
+    NSRegularExpression *_reClosing;
+    NSRegularExpression *_reImgUrl;
+    
+    NSRegularExpression *_reCommas;
+    
 }
 
 -(id) init {
     self= [super init];
     if (self) {
-        NSError *error;
-        _unwantedRe = [NSRegularExpression regularExpressionWithPattern:kAHContentTagsToRemove options:NSRegularExpressionCaseInsensitive error:&error];
-        _contentChunks = [NSMutableArray array];
-    }
-    return self;
-}
-
-- (id) initWithString:(NSString*) str {
-    self = [self init];
-    if (self) {
-        _htmlString = str;
-        _contentTagsRe = [NSRegularExpression regularExpressionWithPattern:kAHContentTagsNames options:NSCaseInsensitiveSearch error:0];
+        _formatTags = @[@"br", @"hr"];
     }
     return self;
 }
@@ -70,7 +182,8 @@
     self = [self init];
     if (self) {
         _handler = [handler copy];
-        _html = [[NSMutableString alloc] init];
+        _paragraphs = [NSMutableArray array];
+        
         if (data) {
             NSDate *startTime = [NSDate date];
             
@@ -101,71 +214,54 @@
 }
 
 -(NSString*) contentHTML {
-    
-    
-    if (_contentChunks.count > 0) {
-        
-        // Go through and output some very simple html
-        NSMutableString *html = [[NSMutableString alloc] init];
-        for (AHContentTextChunk* chunk in _contentChunks) {
-            if (chunk.text.length == 0) continue;
-            if (chunk.isQuote) {
-                [html appendFormat:@"<blockquote><p>%@</p></blockquote>", chunk.text];
-            } else {
-                [html appendFormat:@"<p>%@</p>", chunk.text];
-            }
-        }
-        return html;
+    NSMutableString *html = [[NSMutableString alloc] init];
+    for (AHContentElement *elem in _paragraphs) {
+        [html appendString:elem.outerHTML];
     }
-    return nil;
+    return html;
 }
+
 
 
 #pragma mark - SAX Delegate method
 
 
 -(void) onOpenTagName:(NSString*)tag{
-    if ([tag isEqualToString:@"p"]) {
-        _currentChunk = [[AHContentTextChunk alloc] init];
-        _currentChunk.elementName = tag;
-        _numPs++;
+    if (!([@[@"p", @"a", @"blockquote", @"img"] containsObject:tag])) {
+        return;
     }
-    [_html appendFormat:@"<%@", tag];
+
+    _currentElement = [[AHContentElement alloc] initWithTagName:tag parent:_currentElement];
 }
 
-
--(void) onOpenTagEnd {
-    [_html appendString:@">"];
-    
-}
 
 -(void) onAttributeName:(NSString*)name value:(NSString*) value{
-    [_html appendFormat:@" %@=\"%@\"", name, value];
-
+    [_currentElement.attributes setValue:value forKey:name];
 }
+
 -(void) onText:(NSString*) text{
-    if (_currentChunk) {
-        _currentChunk.text = text;
+    if (_currentElement) {
+        [_currentElement.children addObject:text];
     }
-    [_html appendString:text];
 }
 
 -(void) onCloseTag:(NSString*)tag{
-    if ([tag isEqualToString:@"p"] && _currentChunk) {
-        [_contentChunks addObject:_currentChunk];
-        _currentChunk = nil;
+    AHContentElement *elem = _currentElement;
+    if (elem.parent) {
+        _currentElement = elem.parent;
     }
-    [_html appendFormat:@"</%@>", tag];
-
+    [elem.parent.children addObject:elem];
+    if ([tag isEqualToString:@"p"]) {
+        [_paragraphs addObject:elem];
+    }
 }
 
 -(void) onError{
     
 }
+
 -(void) onEnd{
     self.foundContent = YES;
-    NSLog(@"Found %ld, paragraphs", _numPs);
-    //NSLog(@"%@", _html);
     if (_handler) {
         _handler(self);
     }
