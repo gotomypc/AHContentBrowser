@@ -13,6 +13,12 @@
 #define kAHContentTagsToKeep @"</?(?i:br|strong|ul|a|img|p)(.|\n)*?>"
 #define kAHContentTagsToRemove @"script"
 
+@interface AHContentParser()
+
++(NSString*) trim:(NSString*) str;
+
+@end
+
 
 @interface AHContentElement : NSObject
 
@@ -26,20 +32,23 @@
 @property (nonatomic) NSMutableString *elementData;
 
 // Info properties
-@property (nonatomic) NSInteger *textLength;
-@property (nonatomic) NSInteger *linkLength;
-@property (nonatomic) NSInteger *commas;
-@property (nonatomic) NSInteger *density;
+@property (nonatomic) NSInteger textLength;
+@property (nonatomic) NSInteger linkLength;
+@property (nonatomic) NSInteger commas;
+@property (nonatomic) NSInteger density;
 @property (nonatomic) NSMutableDictionary *tagCount;
 
 @property (nonatomic) BOOL isCandidate;
 
 @property (nonatomic, readonly) NSString *outerHTML;
 @property (nonatomic, readonly) NSString *innerHTML;
+@property (nonatomic, readonly) AHContentElement *topCandidate;
 
 @end
 
-@implementation AHContentElement
+@implementation AHContentElement {
+    NSRegularExpression *_reCommas;
+}
 
 -(id) initWithTagName:(NSString*) tagName parent:(AHContentElement*) parent {
     self = [super init];
@@ -57,8 +66,49 @@
         self.density = 0;
         self.tagCount = 0;
         self.isCandidate = NO;
+        
+        _reCommas = [NSRegularExpression regularExpressionWithPattern:@",[\\s\\,]*" options:0 error:0];
     }
     return self;
+}
+
+-(void) addInfo {
+    for (NSUInteger i=0; i < self.children.count; i++) {
+        AHContentElement *elem = self.children[i];
+        if ([elem isKindOfClass:[NSString class]]) {
+            NSString *elemString = (NSString*) elem;
+            self.textLength += [AHContentParser trim:elemString].length;
+            NSArray *matches = [_reCommas matchesInString:elemString options:0 range:NSMakeRange(0, elemString.length)];
+            if (matches.count > 0) {
+                self.commas += matches.count;
+            }
+        } else {
+            if ([elem.name isEqualToString:@"a"]) {
+                self.linkLength += elem.textLength + elem.linkLength;
+            } else {
+                self.textLength += elem.textLength;
+                self.linkLength += elem.linkLength;
+            }
+            self.commas += elem.commas;
+            
+            for (NSString *key in elem.tagCount.allKeys) {
+                if ([elem.tagCount.allKeys containsObject:key]) {
+                    [self.tagCount setObject: [NSNumber numberWithInt: [[self.tagCount objectForKey: key] intValue] + 1] forKey: key];
+                } else {
+                    [self.tagCount setValue:[elem.tagCount valueForKey:key] forKey:key];
+                }
+            }
+            
+            if ([self.tagCount.allKeys containsObject:elem.name]) {
+                [self.tagCount setObject: [NSNumber numberWithInt: [[self.tagCount objectForKey: elem.name] intValue] + 1] forKey: elem.name];
+            } else {
+                [self.tagCount setValue:[NSNumber numberWithInteger:1] forKey:elem.name];
+            }
+        }
+    }
+    if (self.linkLength != 0) {
+        self.density = self.linkLength / (self.textLength + self.linkLength);
+    }
 }
 
 -(NSString*) innerHTML {
@@ -96,8 +146,39 @@
 
 
 -(NSString*) description {
-    return [NSString stringWithFormat:@"%@", self.name];
+    return [self.children componentsJoinedByString:@""];
 }
+
+-(AHContentElement*) topCandidate {
+    NSInteger score = 0;
+    NSInteger topScore = -NSIntegerMax;
+    AHContentElement *topCandidate = nil;
+    AHContentElement *elem = nil;
+    for (NSUInteger i=0; i<self.children.count; i++) {
+        if ([self.children[i] isKindOfClass:[NSString class]]) {
+            continue;
+        }
+        if ([self.children[i] isCandidate]) {
+            elem = self.children[i];
+            if ([self.tagCount.allKeys containsObject:elem.name]) {
+                elem.tagScore += [[self.tagCount valueForKey:elem.name] integerValue];
+            }
+            
+            score = floor((elem.tagScore + elem.attributeScore) * (1-elem.density));
+            if (topScore < score) {
+                elem.totalScore  = topScore = score;
+                topCandidate = elem;
+            }
+        }
+        if ((elem = [self.children[i] topCandidate]) && topScore < elem.totalScore) {
+            topScore = elem.totalScore;
+            topCandidate = elem;
+        }
+    }
+    return topCandidate;
+}
+
+
 @end
 
 
@@ -114,6 +195,7 @@
     NSString *_headerTitle;
     NSMutableDictionary *_scannedLinks;
     
+    NSArray *_contentTags;
     
     NSArray *_tagsToSkip;
     NSDictionary *_tagCounts;
@@ -165,7 +247,6 @@
     NSRegularExpression *_reClosing;
     NSRegularExpression *_reImgUrl;
     
-    NSRegularExpression *_reCommas;
     
 }
 
@@ -173,6 +254,62 @@
     self= [super init];
     if (self) {
         _formatTags = @[@"br", @"hr"];
+        _contentTags = @[@"p", @"a", @"blockquote", @"img", @"pre"];
+        
+        _tagsToSkip = @[@"aside", @"footer", @"head", @"label", @"nav", @"noscript", @"script", @"select", @"style", @"textarea"];
+        _tagCounts = @{@"address": [NSNumber numberWithInteger:-3], @"article": [NSNumber numberWithInteger:30], @"blockquote": [NSNumber numberWithInteger:3], @"body": [NSNumber numberWithInteger:-5], @"dd": [NSNumber numberWithInteger:-3], @"div": [NSNumber numberWithInteger:5],@"dl": [NSNumber numberWithInteger:-3], @"dt": [NSNumber numberWithInteger:-3], @"form": [NSNumber numberWithInteger:-3], @"h2": [NSNumber numberWithInteger:-5], @"h3": [NSNumber numberWithInteger:-5], @"h4": [NSNumber numberWithInteger:-5],@"h5": [NSNumber numberWithInteger:-5], @"h6": [NSNumber numberWithInteger:-5],@"li": [NSNumber numberWithInteger:-3], @"ol": [NSNumber numberWithInteger:-3], @"pre": [NSNumber numberWithInteger:3], @"section": [NSNumber numberWithInteger:15],@"td": [NSNumber numberWithInteger:3], @"th": [NSNumber numberWithInteger:-5],@"ul": [NSNumber numberWithInteger:-3]};
+            
+        
+        _removeIfEmpty = @[@"blockquote", @"li", @"p", @"pre", @"tbody", @"td", @"th", @"thead", @"tr"  ];
+        _embeds = @[@"embed", @"object", @"iframe"];
+        _goodAttributes = @[@"alt", @"href", @"src", @"title"];
+        _cleanConditionally = @[@"div", @"form", @"ol", @"table", @"ul"];
+        _unpackDivs = [_embeds arrayByAddingObjectsFromArray:@[@"div", @"img"]];
+        _noContent = [_formatTags arrayByAddingObjectsFromArray:@[@"font", @"input", @"link", @"meta", @"span"]];
+        _formatTags = @[@"br", @"hr"];
+        _headerTags = @[@"h1", @"h2", @"h3", @"h4", @"h5", @"h6"];
+        _newLinesAfter = [_headerTags arrayByAddingObjectsFromArray:@[@"br", @"li", @"p"]];
+        
+        _divToPElements = @[@"a", @"blockquote", @"dl", @"img", @"ol", @"p", @"pre", @"table", @"ul"];
+        _okIfEmpty = @[@"audio", @"embed", @"iframe", @"img",@"object", @"video"];
+        
+        _reVideos = [NSRegularExpression regularExpressionWithPattern:@"http:\\/\\/(?:www\\.)?(?:youtube|vimeo)\\.com" options:0 error:0];
+        _reNextLink = [NSRegularExpression regularExpressionWithPattern:@"[>»]|continue|next|weiter(?:[^\\|]|$)" options:0 error:0];
+        _rePrevLink = [NSRegularExpression regularExpressionWithPattern:@"[<«]|earl|new|old|prev" options:0 error:0];
+        _reExtraneous = [NSRegularExpression regularExpressionWithPattern:@"all|archive|comment|discuss|e-?mail|login|print|reply|share|sign|single" options:0 error:0];
+        _rePages = [NSRegularExpression regularExpressionWithPattern:@"pag(?:e|ing|inat)" options:0 error:0];
+        _rePageNum = [NSRegularExpression regularExpressionWithPattern:@"p[ag]{0,2}(?:e|ing|ination)?[=\\/]\\d{1,2}" options:0 error:0];
+        
+        _reSafe = [NSRegularExpression regularExpressionWithPattern:@"article-body|hentry|instapaper_body" options:0 error:0];
+        _reFinal = [NSRegularExpression regularExpressionWithPattern:@"first|last" options:0 error:0];
+        
+        _rePositive = [NSRegularExpression regularExpressionWithPattern:@"article|blog|body|content|entry|main|news|pag(?:e|ination)|post|story|text" options:0 error:0];
+        _reNegative = [NSRegularExpression regularExpressionWithPattern:@"com(?:bx|ment|-)|contact|foot(?:er|note)?|masthead|media|meta|outbrain|promo|related|scroll|shoutbox|sidebar|sponsor|shopping|tags|tool|widget" options:0 error:0];
+        _reUnlikelyCandidates = [NSRegularExpression regularExpressionWithPattern:@"ad-break|aggregrate|auth?or|bookmark|cat|com(?:bx|ment|munity)|date|disqus|extra|foot|header|ignore|links|menu|nav|pag(?:er|ination)|popup|related|remark|rss|share|shoutbox|sidebar|similar|social|sponsor|teaserlist|time|tweet|twitter" options:0 error:0];
+        _reOKMaybeItsACandidate = [NSRegularExpression regularExpressionWithPattern:@"and|article|body|column|main|shadow" options:0 error:0];
+        
+        
+        _reSentence = [NSRegularExpression regularExpressionWithPattern:@"\\. |\\.$" options:0 error:0];
+        _reWhitespace = [NSRegularExpression regularExpressionWithPattern:@"\\s+" options:0 error:0];
+        
+        _rePageInURL = [NSRegularExpression regularExpressionWithPattern:@"[_\\-]?p[a-zA-Z]*[_\\-]?\\d{1,2}$" options:0 error:0];
+        _reBadFirst = [NSRegularExpression regularExpressionWithPattern:@"^(?:[^a-z]{0,3}|index|\\d+)$" options:0 error:0];
+        _reNoLetters = [NSRegularExpression regularExpressionWithPattern:@"[^a-zA-Z]" options:0 error:0];
+        _reParams = [NSRegularExpression regularExpressionWithPattern:@"\\?.*" options:0 error:0];
+        _reExtension = [NSRegularExpression regularExpressionWithPattern:@"00,|\\.[a-zA-Z]+$" options:0 error:0];
+        _reDigits = [NSRegularExpression regularExpressionWithPattern:@"\\d" options:0 error:0];
+        _reJustDigits = [NSRegularExpression regularExpressionWithPattern:@"^\\d{1,2}$" options:0 error:0];
+        _reSlashes = [NSRegularExpression regularExpressionWithPattern:@"\\/+" options:0 error:0];
+        _reDomain = [NSRegularExpression regularExpressionWithPattern:@"\\/([^\\/]+)" options:0 error:0];
+        
+        _reProtocol = [NSRegularExpression regularExpressionWithPattern:@"^\\w+\\:" options:0 error:0];
+        _reCleanPaths = [NSRegularExpression regularExpressionWithPattern:@"\\/\\.(?!\\.)|\\/[^\\/]*\\/\\.\\." options:0 error:0];
+        
+        _reClosing = [NSRegularExpression regularExpressionWithPattern:@"\\/?(?:#.*)?$" options:0 error:0];
+        _reImgUrl = [NSRegularExpression regularExpressionWithPattern:@"\\.(gif|jpe?g|png|webp)$" options:0 error:0];
+        
+
+        
     }
     return self;
 }
@@ -214,11 +351,16 @@
 }
 
 -(NSString*) contentHTML {
-    NSMutableString *html = [[NSMutableString alloc] init];
-    for (AHContentElement *elem in _paragraphs) {
-        [html appendString:elem.outerHTML];
-    }
-    return html;
+    AHContentElement *node = [self getCandidateNode];
+    return [AHContentParser trim:node.innerHTML];
+//    //remove spaces in front of <br>s
+//    .replace(/(?:\s|&nbsp;?)+(?=<br\/>)/g, "")
+//    //remove <br>s in front of opening & closing <p>s
+//    .replace(/(?:<br\/>)+(?:\s|&nbsp;?)*(?=<\/?p)/g, "")
+//    //turn all double+ <br>s into <p>s
+//    .replace(/(?:<br\/>){2,}/g, "</p><p>")
+//    //trim the result
+//    .trim();
 }
 
 
@@ -226,17 +368,36 @@
 #pragma mark - SAX Delegate method
 
 
--(void) onOpenTagName:(NSString*)tag{
-    if (!([@[@"p", @"a", @"blockquote", @"img"] containsObject:tag])) {
-        return;
-    }
-
-    _currentElement = [[AHContentElement alloc] initWithTagName:tag parent:_currentElement];
+-(void) onOpenTagName:(NSString*)name{
+    
+    if ([_noContent containsObject:name]) {
+        if ([_formatTags containsObject:name]) {
+            [_currentElement.children addObject:[[AHContentElement alloc] initWithTagName:name parent:_currentElement]];
+        }
+    } else _currentElement = [[AHContentElement alloc] initWithTagName:name parent:_currentElement];
 }
 
 
 -(void) onAttributeName:(NSString*)name value:(NSString*) value{
-    [_currentElement.attributes setValue:value forKey:name];
+    
+    if (!value) {
+        return;
+    }
+    
+    name = [name lowercaseString];
+    AHContentElement *elem = _currentElement;
+    
+    [elem.attributes setValue:value forKey:name];
+    
+//    if ([name isEqualToString:@"href"] || [name isEqualToString:@"src"]) {
+//         //fix links
+//        if ([_reProtocol firstMatchInString:value options:NSCaseInsensitiveSearch range:NSMakeRange(0, value.length)]) {
+//            [elem.attributes setValue:value forKey:name];
+//        } else {
+//            elem.attributes setValue:<#(id)#> forKey:<#(NSString *)#>
+//        }
+//    }
+
 }
 
 -(void) onText:(NSString*) text{
@@ -245,16 +406,100 @@
     }
 }
 
--(void) onCloseTag:(NSString*)tag{
+-(void) onCloseTag:(NSString*)tagName{
+    
+    if ([_noContent containsObject:tagName]) {
+        return;
+    }
+    
     AHContentElement *elem = _currentElement;
+    _currentElement = elem.parent;
     if (elem.parent) {
         _currentElement = elem.parent;
     }
+    
+    if ([_tagsToSkip containsObject:tagName]) {
+        return;
+    }
+    [elem addInfo];
     [elem.parent.children addObject:elem];
-    if ([tag isEqualToString:@"p"]) {
-        [_paragraphs addObject:elem];
+    
+
+    
+    if ([tagName isEqualToString:@"p"] || [tagName isEqualToString:@"pre"] || [tagName isEqualToString:@"td"]);
+    else if ([tagName isEqualToString:@"div"]) {
+        //check if div should be converted to p
+        for (NSInteger i=0, j = _divToPElements.count; i<j; i++) {
+            if ([elem.tagCount.allKeys containsObject:_divToPElements[i]]) {
+                return;
+            }
+        }
+        elem.name = @"p";
+    } else return;
+    
+    if (elem.textLength + elem.linkLength > 24 && elem.parent && elem.parent.parent) {
+        elem.parent.isCandidate = elem.parent.parent.isCandidate = true;
+        NSInteger addScore = 1 + elem.commas + MIN(floor((elem.textLength + elem.linkLength) / 100), 3);
+        elem.parent.tagScore += addScore;
+        elem.parent.parent.tagScore += addScore/2;
     }
 }
+
+-(NSArray*) getCandidateSiblings:(AHContentElement*) candidate {
+    NSMutableArray *ret = [NSMutableArray array];
+    NSInteger siblingScoreThreshhold = MAX(10, candidate.totalScore *.2);
+    NSArray *childs = candidate.parent.children;
+    for (NSInteger i = 0; i < childs.count ; i++) {
+        if ([childs[i] isKindOfClass:[NSString class]]) {
+            continue;
+        }
+        AHContentElement *child = childs[i];
+        NSString *childText = [child description];
+        if ([child isEqual:candidate]);
+        else if ([candidate.elementData isEqualToString:child.elementData]) {
+            if ((child.totalScore + candidate.totalScore *.2) > siblingScoreThreshhold) {
+                if ([child.name isEqualToString:@"p"]) {
+                    child.name = @"div";
+                }
+            } else if ([child.name isEqualToString:@"p"]) {
+                if (child.textLength >= 80 && child.density < .25);
+                else if (child.textLength < 80 && child.density == 0 && [_reSentence numberOfMatchesInString:childText options:0 range:NSMakeRange(0, childText.length)]);
+                else continue;
+            }
+        } else continue;
+        
+        [ret addObject:child];
+    }
+    return ret;
+}
+
+-(AHContentElement*) getCandidateNode {
+    NSArray *elems;
+    AHContentElement *elem = _topCandidate;
+    if (!elem) {
+        elem = _topCandidate = _currentElement.topCandidate;
+    }
+    
+    if (!elem) {
+        elem = _currentElement;
+    } else if (elem.parent.children.count > 1) {
+        elems = [self getCandidateSiblings:elem];
+        
+        //create a new object so that the prototype methods are callable
+        elem = [[AHContentElement alloc] initWithTagName:@"div" parent:nil];
+        elem.children = [elems mutableCopy];
+        [elem addInfo];
+    }
+    
+    while (elem.children.count == 1) {
+        if ([elem.children[0] isKindOfClass:[AHContentElement class]]) {
+            elem = elem.children[0];
+        } else break;
+    }
+    return elem;
+}
+
+
 
 -(void) onError{
     
@@ -271,7 +516,7 @@
 #pragma mark - Super Awesome NSString methods
 
 
--(NSString*)trim:(NSString*) str {
++(NSString*)trim:(NSString*) str {
     return [str stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
 }
 
