@@ -23,7 +23,7 @@
 @interface AHContentElement : NSObject
 
 @property (nonatomic) NSString* name;
-@property (nonatomic, weak) AHContentElement *parent;
+@property (nonatomic) AHContentElement *parent;
 @property (nonatomic) NSMutableDictionary *attributes;
 @property (nonatomic) NSMutableArray *children;
 @property (nonatomic) NSInteger tagScore;
@@ -374,7 +374,9 @@
         if ([_formatTags containsObject:name]) {
             [_currentElement.children addObject:[[AHContentElement alloc] initWithTagName:name parent:_currentElement]];
         }
-    } else _currentElement = [[AHContentElement alloc] initWithTagName:name parent:_currentElement];
+    } else {
+        _currentElement = [[AHContentElement alloc] initWithTagName:name parent:_currentElement];
+    }
 }
 
 
@@ -411,16 +413,16 @@
     if ([_noContent containsObject:tagName]) {
         return;
     }
-    
+    if ([_tagsToSkip containsObject:tagName]) {
+        return;
+    }
+
     AHContentElement *elem = _currentElement;
     _currentElement = elem.parent;
     if (elem.parent) {
         _currentElement = elem.parent;
     }
     
-    if ([_tagsToSkip containsObject:tagName]) {
-        return;
-    }
     [elem addInfo];
     [elem.parent.children addObject:elem];
     
@@ -437,7 +439,7 @@
         elem.name = @"p";
     } else return;
     
-    if (elem.textLength + elem.linkLength > 24 && elem.parent && elem.parent.parent) {
+    if ((elem.textLength + elem.linkLength > 24) && elem.parent && elem.parent.parent) {
         elem.parent.isCandidate = elem.parent.parent.isCandidate = true;
         NSInteger addScore = 1 + elem.commas + MIN(floor((elem.textLength + elem.linkLength) / 100), 3);
         elem.parent.tagScore += addScore;
