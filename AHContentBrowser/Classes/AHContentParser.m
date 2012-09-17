@@ -48,6 +48,7 @@
 
 @implementation AHContentElement {
     NSRegularExpression *_reCommas;
+    NSDictionary *_tagCounts;
 }
 
 -(id) initWithTagName:(NSString*) tagName parent:(AHContentElement*) parent {
@@ -64,9 +65,11 @@
         self.linkLength = 0;
         self.commas = 0;
         self.density = 0;
-        self.tagCount = 0;
+        self.tagCount = [NSMutableDictionary dictionary];
         self.isCandidate = NO;
         
+        _tagCounts = @{@"address": [NSNumber numberWithInteger:-3], @"article": [NSNumber numberWithInteger:30], @"blockquote": [NSNumber numberWithInteger:3], @"body": [NSNumber numberWithInteger:-5], @"dd": [NSNumber numberWithInteger:-3], @"div": [NSNumber numberWithInteger:5],@"dl": [NSNumber numberWithInteger:-3], @"dt": [NSNumber numberWithInteger:-3], @"form": [NSNumber numberWithInteger:-3], @"h2": [NSNumber numberWithInteger:-5], @"h3": [NSNumber numberWithInteger:-5], @"h4": [NSNumber numberWithInteger:-5],@"h5": [NSNumber numberWithInteger:-5], @"h6": [NSNumber numberWithInteger:-5],@"li": [NSNumber numberWithInteger:-3], @"ol": [NSNumber numberWithInteger:-3], @"pre": [NSNumber numberWithInteger:3], @"section": [NSNumber numberWithInteger:15],@"td": [NSNumber numberWithInteger:3], @"th": [NSNumber numberWithInteger:-5],@"ul": [NSNumber numberWithInteger:-3]};
+
         _reCommas = [NSRegularExpression regularExpressionWithPattern:@",[\\s\\,]*" options:0 error:0];
     }
     return self;
@@ -83,6 +86,9 @@
                 self.commas += matches.count;
             }
         } else {
+            if ([elem.attributes.allValues containsObject:@"entry-body"]) {
+                NSLog(@"");
+            }
             if ([elem.name isEqualToString:@"a"]) {
                 self.linkLength += elem.textLength + elem.linkLength;
             } else {
@@ -93,7 +99,9 @@
             
             for (NSString *key in elem.tagCount.allKeys) {
                 if ([elem.tagCount.allKeys containsObject:key]) {
-                    [self.tagCount setObject: [NSNumber numberWithInt: [[self.tagCount objectForKey: key] intValue] + 1] forKey: key];
+                    NSInteger currentTagCount = [[self.tagCount valueForKey:key] integerValue];
+                    NSInteger elemTagCount = [[elem.tagCount objectForKey: key] intValue];
+                    [self.tagCount setObject: [NSNumber numberWithInteger:(currentTagCount + elemTagCount)] forKey: key];
                 } else {
                     [self.tagCount setValue:[elem.tagCount valueForKey:key] forKey:key];
                 }
@@ -160,8 +168,14 @@
         }
         if ([self.children[i] isCandidate]) {
             elem = self.children[i];
-            if ([self.tagCount.allKeys containsObject:elem.name]) {
-                elem.tagScore += [[self.tagCount valueForKey:elem.name] integerValue];
+            
+            if ([elem.attributes.allValues containsObject:@"entry-body"]) {
+                NSLog(@"");
+            }
+
+            // add points for the tag names
+            if ([_tagCounts.allKeys containsObject:elem.name]) {
+                elem.tagScore += [[_tagCounts valueForKey:elem.name] integerValue];
             }
             
             score = floor((elem.tagScore + elem.attributeScore) * (1-elem.density));
@@ -198,7 +212,6 @@
     NSArray *_contentTags;
     
     NSArray *_tagsToSkip;
-    NSDictionary *_tagCounts;
     NSArray *_removeIfEmpty;
     NSArray *_embeds;
     NSArray *_goodAttributes;
@@ -256,8 +269,7 @@
         _formatTags = @[@"br", @"hr"];
         _contentTags = @[@"p", @"a", @"blockquote", @"img", @"pre"];
         
-        _tagsToSkip = @[@"aside", @"footer", @"head", @"label", @"nav", @"noscript", @"script", @"select", @"style", @"textarea"];
-        _tagCounts = @{@"address": [NSNumber numberWithInteger:-3], @"article": [NSNumber numberWithInteger:30], @"blockquote": [NSNumber numberWithInteger:3], @"body": [NSNumber numberWithInteger:-5], @"dd": [NSNumber numberWithInteger:-3], @"div": [NSNumber numberWithInteger:5],@"dl": [NSNumber numberWithInteger:-3], @"dt": [NSNumber numberWithInteger:-3], @"form": [NSNumber numberWithInteger:-3], @"h2": [NSNumber numberWithInteger:-5], @"h3": [NSNumber numberWithInteger:-5], @"h4": [NSNumber numberWithInteger:-5],@"h5": [NSNumber numberWithInteger:-5], @"h6": [NSNumber numberWithInteger:-5],@"li": [NSNumber numberWithInteger:-3], @"ol": [NSNumber numberWithInteger:-3], @"pre": [NSNumber numberWithInteger:3], @"section": [NSNumber numberWithInteger:15],@"td": [NSNumber numberWithInteger:3], @"th": [NSNumber numberWithInteger:-5],@"ul": [NSNumber numberWithInteger:-3]};
+        _tagsToSkip = @[ @"aside", @"footer", @"head", @"label", @"nav", @"noscript", @"script", @"select", @"style", @"textarea"];
             
         
         _removeIfEmpty = @[@"blockquote", @"li", @"p", @"pre", @"tbody", @"td", @"th", @"thead", @"tr"  ];
@@ -370,6 +382,10 @@
 
 -(void) onOpenTagName:(NSString*)name{
     
+    if ([_tagsToSkip containsObject:name]) {
+        return;
+    }
+
     if ([_noContent containsObject:name]) {
         if ([_formatTags containsObject:name]) {
             [_currentElement.children addObject:[[AHContentElement alloc] initWithTagName:name parent:_currentElement]];
@@ -418,14 +434,15 @@
     }
 
     AHContentElement *elem = _currentElement;
-    _currentElement = elem.parent;
     if (elem.parent) {
         _currentElement = elem.parent;
     }
     
     [elem addInfo];
     [elem.parent.children addObject:elem];
-    
+    if ([elem.attributes.allValues containsObject:@"entry-body"]) {
+        NSLog(@"");
+    }
 
     
     if ([tagName isEqualToString:@"p"] || [tagName isEqualToString:@"pre"] || [tagName isEqualToString:@"td"]);
@@ -440,11 +457,12 @@
     } else return;
     
     if ((elem.textLength + elem.linkLength > 24) && elem.parent && elem.parent.parent) {
-        elem.parent.isCandidate = elem.parent.parent.isCandidate = true;
+        elem.parent.isCandidate = elem.parent.parent.isCandidate = YES;
         NSInteger addScore = 1 + elem.commas + MIN(floor((elem.textLength + elem.linkLength) / 100), 3);
         elem.parent.tagScore += addScore;
         elem.parent.parent.tagScore += addScore/2;
     }
+    
 }
 
 -(NSArray*) getCandidateSiblings:(AHContentElement*) candidate {

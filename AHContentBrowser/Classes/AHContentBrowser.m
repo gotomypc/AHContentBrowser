@@ -67,7 +67,6 @@
         NSTimeInterval downloadTime = [[NSDate date] timeIntervalSinceDate:startTime];
         NSLog(@"Time to download: %f", downloadTime);
         contentParser = [[AHContentParser alloc] initWithData:data handler:^(AHContentParser *parser) {
-            //Extract the body
             NSString *contentHTML = parser.contentHTML;
             if (contentHTML) {
                 
@@ -75,10 +74,12 @@
                 NSString *htmlString  = [templateString stringByReplacingOccurrencesOfString:@"<readableTemplate/>" withString:contentHTML];
                 NSString *path = [[NSBundle mainBundle] bundlePath];
                 NSURL *baseURL = [NSURL fileURLWithPath:path];
-                [[self mainFrame] loadHTMLString:htmlString baseURL:baseURL];
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [[self mainFrame] loadHTMLString:htmlString baseURL:baseURL];
+                    NSTimeInterval textTime = [[NSDate date] timeIntervalSinceDate:startTime];
+                    timeTextLabel.stringValue = [NSString stringWithFormat:@"Time: %f", textTime];
+                });
                 
-                NSTimeInterval textTime = [[NSDate date] timeIntervalSinceDate:startTime];
-                timeTextLabel.stringValue = [NSString stringWithFormat:@"Time: %f", textTime];
                 
             }
         }];
