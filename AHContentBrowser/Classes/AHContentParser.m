@@ -38,20 +38,17 @@
 @property (nonatomic) NSInteger tagScore;
 @property (nonatomic) NSInteger attributeScore;
 @property (nonatomic) NSInteger totalScore;
+@property (nonatomic) BOOL hasChildContainingText;
 @property (nonatomic) BOOL isCandidate;
 
 // Converting to html
 @property (nonatomic, readonly) NSString *outerHTML;
 @property (nonatomic, readonly) NSString *innerHTML;
 
--(void) score;
 
 @end
 
 @implementation AHContentElement {
-    NSRegularExpression *_reCommas;
-    NSDictionary *_tagCounts;
-    NSRegularExpression *_reSentence;
     
 }
 
@@ -73,11 +70,6 @@
         self.totalScore = 0;
         self.tagCount = [NSMutableDictionary dictionary];
         self.isCandidate = NO;
-        
-        _tagCounts = @{@"address": [NSNumber numberWithInteger:-3], @"article": [NSNumber numberWithInteger:30], @"blockquote": [NSNumber numberWithInteger:3], @"body": [NSNumber numberWithInteger:-5], @"dd": [NSNumber numberWithInteger:-3], @"div": [NSNumber numberWithInteger:5],  @"br": [NSNumber numberWithInteger:10], @"dl": [NSNumber numberWithInteger:-3], @"dt": [NSNumber numberWithInteger:-3], @"form": [NSNumber numberWithInteger:-3], @"h2": [NSNumber numberWithInteger:-5], @"h3": [NSNumber numberWithInteger:-5], @"h4": [NSNumber numberWithInteger:-5],@"h5": [NSNumber numberWithInteger:-5], @"h6": [NSNumber numberWithInteger:-5],@"li": [NSNumber numberWithInteger:-3], @"ol": [NSNumber numberWithInteger:-3], @"pre": [NSNumber numberWithInteger:3], @"section": [NSNumber numberWithInteger:15],@"td": [NSNumber numberWithInteger:3], @"th": [NSNumber numberWithInteger:-5],@"ul": [NSNumber numberWithInteger:-3]};
-        
-        _reCommas = [NSRegularExpression regularExpressionWithPattern:@",[\\s\\,]*" options:0 error:0];
-        _reSentence = [NSRegularExpression regularExpressionWithPattern:@"\\. |\\.$" options:0 error:0];
     }
     return self;
 }
@@ -90,83 +82,6 @@
 //score = floor((elem.tagScore + elem.attributeScore) * (1-elem.density));
 
 
--(void) score {
-    if ([self.attributes.allValues containsObject:@"articleBody"]) {
-        NSLog(@"");
-    }
-
-    // aggregrate totals, from children
-    for (NSUInteger i=0; i < self.children.count; i++) {
-        AHContentElement *elem = self.children[i];
-        if ([elem isKindOfClass:[NSString class]]) {
-            NSString *elemString = (NSString*) elem;
-            self.textLength += [AHContentParser trim:elemString].length;
-            
-            self.numOfCommas += [_reCommas numberOfMatchesInString:elemString options:0 range:NSMakeRange(0, elemString.length)];
-            
-            self.numOfSentences += [_reSentence numberOfMatchesInString:elemString options:0 range:NSMakeRange(0, elemString.length)];
-        } else {
-            if ([self.attributes.allValues containsObject:@"articleBody"]) {
-                NSLog(@"");
-            }
-            
-            if ([elem.name isEqualToString:@"a"]) {
-                self.linkLength += elem.textLength + elem.linkLength;
-            } else {
-                self.textLength += elem.textLength;
-                self.linkLength += elem.linkLength;
-            }
-            self.numOfCommas += elem.numOfCommas;
-            self.numOfSentences += elem.numOfSentences;
-            
-            // aggregrate tag counts
-            for (NSString *key in elem.tagCount.allKeys) {
-                if ([elem.tagCount.allKeys containsObject:key]) {
-                    NSInteger currentTagCount = [[self.tagCount valueForKey:key] integerValue];
-                    NSInteger elemTagCount = [[elem.tagCount objectForKey: key] intValue];
-                    [self.tagCount setObject: [NSNumber numberWithInteger:(currentTagCount + elemTagCount)] forKey: key];
-                } else {
-                    [self.tagCount setValue:[elem.tagCount valueForKey:key] forKey:key];
-                }
-            }
-            if ([self.tagCount.allKeys containsObject:elem.name]) {
-                [self.tagCount setObject: [NSNumber numberWithInt: [[self.tagCount objectForKey: elem.name] intValue] + 1] forKey: elem.name];
-            } else {
-                [self.tagCount setValue:[NSNumber numberWithInteger:1] forKey:elem.name];
-            }
-        }
-    }
-    
-    // Score...
-    
-    // Score up longer text
-    if (self.textLength > 1000) {
-        self.totalScore += 10;
-    }
-    if (self.textLength > 200) {
-        self.totalScore += 5;
-    }
-    
-    // Score up text by number of commas
-    self.totalScore += self.numOfCommas;
-
-    // Score up sentences
-    self.totalScore += self.numOfSentences;
-
-    // score up for low linkDensitys
-    if (self.linkLength != 0) {
-        self.linkDensity = (float) self.linkLength / (float)(self.textLength + self.linkLength);
-        if (self.linkDensity < 0.2) {
-            self.totalScore+= 5;
-        }
-        if (self.linkDensity < 0.1) {
-            self.totalScore += 5;
-        }
-    }
-    
-    // Todo: Score tags
-    
-}
 
 -(NSString*) innerHTML {
     NSMutableString *ret = [[NSMutableString alloc] init];
@@ -224,15 +139,19 @@
     NSString *_headerTitle;
     NSMutableDictionary *_scannedLinks;
     
-    NSArray *_contentTags;
+    NSMutableArray *_contentTags;
+    NSArray *_candidateTags;
     
     NSArray *_tagsToSkip;
+    NSDictionary *_tagCounts;
+    NSRegularExpression *_reCommas;
+    
+    
     NSArray *_removeIfEmpty;
     NSArray *_embeds;
     NSArray *_goodAttributes;
     NSArray *_cleanConditionally;
     NSArray  *_unpackDivs;
-    NSArray *_noContent;
     NSArray *_formatTags;
     NSArray *_headerTags;
     NSArray *_newLinesAfter;
@@ -282,19 +201,25 @@
     self= [super init];
     if (self) {
         _formatTags = @[@"br", @"hr"];
-        _contentTags = @[@"p", @"a", @"blockquote", @"img", @"pre"];
+        _headerTags = @[@"h1", @"h2", @"h3", @"h4", @"h5", @"h6"];
+        
+        _contentTags = [[_formatTags arrayByAddingObjectsFromArray:@[@"article", @"section", @"body", @"div", @"p", @"li", @"ol", @"ul", @"a", @"blockquote", @"img", @"pre", @"a", @"td", @"em", @"i"]] mutableCopy];
+        [_contentTags addObjectsFromArray:_headerTags];
+        
+        _candidateTags = [NSArray arrayWithObjects:@"div", @"body", @"p", @"ul", @"article", @"section", nil];
         
         _tagsToSkip = @[ @"iframe", @"aside", @"footer", @"head", @"label", @"nav", @"noscript", @"script", @"select", @"style", @"textarea" @"input", @"font", @"input", @"link", @"meta" ];
         
+        
+        _tagCounts = @{@"address": [NSNumber numberWithInteger:-3], @"p": [NSNumber numberWithInteger:20], @"article": [NSNumber numberWithInteger:30], @"blockquote": [NSNumber numberWithInteger:3], @"body": [NSNumber numberWithInteger:-5], @"dd": [NSNumber numberWithInteger:-3], @"em": [NSNumber numberWithInteger:2],  @"div": [NSNumber numberWithInteger:0],  @"br": [NSNumber numberWithInteger:2], @"dl": [NSNumber numberWithInteger:-3], @"dt": [NSNumber numberWithInteger:-3], @"form": [NSNumber numberWithInteger:-3], @"h2": [NSNumber numberWithInteger:0], @"h3": [NSNumber numberWithInteger:0], @"h4": [NSNumber numberWithInteger:0],@"h5": [NSNumber numberWithInteger:0], @"h6": [NSNumber numberWithInteger:0],@"li": [NSNumber numberWithInteger:-3], @"ol": [NSNumber numberWithInteger:-3], @"pre": [NSNumber numberWithInteger:3], @"section": [NSNumber numberWithInteger:15],@"td": [NSNumber numberWithInteger:3], @"th": [NSNumber numberWithInteger:-5],@"ul": [NSNumber numberWithInteger:-3]};
+        
+        _reCommas = [NSRegularExpression regularExpressionWithPattern:@",[\\s\\,]*" options:0 error:0];;
         
         _removeIfEmpty = @[@"blockquote", @"li", @"p", @"pre", @"tbody", @"td", @"th", @"thead", @"tr"  ];
         _embeds = @[@"embed", @"object", @"iframe"];
         _goodAttributes = @[@"alt", @"href", @"src", @"title"];
         _cleanConditionally = @[@"div", @"form", @"ol", @"table", @"ul"];
         _unpackDivs = [_embeds arrayByAddingObjectsFromArray:@[@"div", @"img"]];
-        _noContent = [_formatTags arrayByAddingObjectsFromArray:@[@"font", @"input", @"link", @"meta", @"span"]];
-        _formatTags = @[@"br", @"hr"];
-        _headerTags = @[@"h1", @"h2", @"h3", @"h4", @"h5", @"h6"];
         _newLinesAfter = [_headerTags arrayByAddingObjectsFromArray:@[@"br", @"li", @"p"]];
         
         _divToPElements = @[@"a", @"blockquote", @"dl", @"img", @"ol", @"p", @"pre", @"table", @"ul"];
@@ -367,6 +292,7 @@
             }
             
             _saxParser = [[AHSAXParser alloc] initWithDelegate:self];
+            //_htmlString = [self removeUnwantedTags:_htmlString];
             [_saxParser end:_htmlString];
             
             NSLog(@"Time to parse content: %f", [[NSDate date] timeIntervalSinceDate:startTime] );
@@ -390,21 +316,17 @@
 
 
 
-#pragma mark - SAX Delegate method
+#pragma mark - SAX delegate methods
 
 
 -(void) onOpenTagName:(NSString*)name{
     
     // Ignore a lot of tags
-    if ([_tagsToSkip containsObject:name]) {
+    if (![_contentTags containsObject:name] ) {
         if (_currentElement) {
             _currentElement.totalScore -= 10;
         }
-        _skipping = YES;
-        return;
     }
-    
-    _skipping = NO;
     
     if ([_formatTags containsObject:name] && _currentElement) {
         [_currentElement.children addObject:[[AHContentElement alloc] initWithTagName:name parent:_currentElement]];
@@ -416,7 +338,7 @@
 
 -(void) onAttributeName:(NSString*)name value:(NSString*) value{
     
-    if (!value || _skipping) {
+    if (!value) {
         return;
     }
     
@@ -438,42 +360,108 @@
 
 -(void) onText:(NSString*) text{
     
-    if (_currentElement && !_skipping) {
+    if (_currentElement) {
         [_currentElement.children addObject:text];
     }
-    
     
 }
 
 -(void) onCloseTag:(NSString*)tagName{
     
-    if ([_noContent containsObject:tagName]) {
-        return;
-    }
-    if ([_tagsToSkip containsObject:tagName]) {
-        return;
-    }
     
     AHContentElement *elem = _currentElement;
+    
     if (elem.parent) {
         _currentElement = elem.parent;
     }
     
-    [elem score];
-    [elem.parent.children addObject:elem];
-    if ([elem.attributes.allValues containsObject:@"articleBody"]) {
+    if (![_contentTags containsObject:tagName]) {
+        return;
+    }
+    
+    if ([elem.attributes.allValues containsObject:@"entry_body_text"]) {
         NSLog(@"");
     }
-
-    if ([elem.name isEqualToString:@"div"] && elem.totalScore > 25 && elem.totalScore > _topCandidate.totalScore) {
+    
+    
+    // Score...
+    for (NSUInteger i=0; i < elem.children.count; i++) {
+        AHContentElement *child = elem.children[i];
+        if ([child isKindOfClass:[NSString class]]) {
+            NSString *childString = (NSString*) child;
+            childString = [[childString componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]] componentsJoinedByString:@""];
+            childString = [AHContentParser trim:childString];
+            if (childString.length < 1) {
+                continue;
+            }
+            elem.hasChildContainingText = YES;
+            elem.textLength += childString.length;
+            
+            elem.numOfCommas += [_reCommas numberOfMatchesInString:childString options:0 range:NSMakeRange(0, childString.length)];
+            
+        } else {
+            
+            // we only aggregrate text and link length for elements that have direct text descendants themselves
+            if (elem.hasChildContainingText) {
+                if ([child.name isEqualToString:@"a"]) {
+                    elem.linkLength += child.textLength + child.linkLength;
+                } else {
+                    elem.textLength += child.textLength;
+                    elem.linkLength += child.linkLength;
+                }
+                elem.numOfCommas += child.numOfCommas;
+                elem.numOfSentences += child.numOfSentences;
+            }
+            
+            // Score the child tag
+            NSNumber *tagScore = [_tagCounts valueForKey:child.name];
+            if (tagScore) {
+                elem.totalScore += [tagScore integerValue];
+            }
+            
+            // Score up for children that score well
+            if (child.totalScore > 20) {
+                elem.totalScore +=5;
+            }
+        }
+    }
+ 
+    
+    // Score up longer text
+    if (elem.textLength > 1000) {
+        elem.totalScore += 20;
+    } else if (elem.textLength > 200) {
+        elem.totalScore += 10;
+    } else if (elem.textLength > 10) {
+        elem.totalScore += 5;
+    }
+    
+    // Score up text by number of commas
+    elem.totalScore += elem.numOfCommas;
+    
+    // Score up elements with low linkDensitys
+    if (elem.linkLength != 0) {
+        elem.linkDensity = (float) elem.linkLength / (float)(elem.textLength + elem.linkLength);
+        if (elem.linkDensity < 0.2) {
+            elem.totalScore+= 5;
+        }
+        if (elem.linkDensity < 0.1) {
+            elem.totalScore += 5;
+        }
+    } else if (elem.textLength > 10) {
+        elem.totalScore += 5;
+    }
+    
+    
+    [elem.parent.children addObject:elem];
+    
+    if ([_candidateTags containsObject:elem.name] && elem.totalScore > 20
+        && elem.totalScore > _topCandidate.totalScore) {
         _topCandidate = elem;
+        NSLog(@"Top candidate is %@ %@ with a score of %ld", elem.name, elem.attributes, elem.totalScore);
     }
     
 }
-
-
-
-
 
 
 -(void) onError{
@@ -497,44 +485,21 @@
 
 
 
-+ (NSString *)stringByStrippingHTML:(NSString *)inputString includeRegEx:(NSString*)includeRegEx excludeRegEx:(NSString*) excludeRegEx;
-{
-    //NSDate *startTime = [NSDate date];
-    NSMutableString *outString;
+- (NSString *)removeUnwantedTags:(NSString *)html {
+    NSRegularExpression *unwantedTagsRe = [NSRegularExpression regularExpressionWithPattern:@"<head|<script|<style" options:NSCaseInsensitiveSearch error:0];
     
-    if (inputString)
-    {
-        
-        outString = [[NSMutableString alloc] initWithString:inputString];
-        //remove all by default;
-        includeRegEx = includeRegEx ? includeRegEx : @"<[^>]+>";
-        
-        if ([inputString length] > 0)
-        {
-            NSRange r;
-            NSRange searchRange = NSMakeRange(0, outString.length);
-            while ((r = [outString rangeOfString:includeRegEx options:NSRegularExpressionSearch range:searchRange]).location != NSNotFound)
-            {
-                NSString *textInQuestion = [outString substringWithRange:r];
-                if (!excludeRegEx || [textInQuestion rangeOfString:excludeRegEx options:NSRegularExpressionSearch].location == NSNotFound) {
-                    [outString deleteCharactersInRange:r];
-                } else {
-                    r.location += r.length;
-                    
-                }
-                searchRange =  NSMakeRange(r.location, outString.length - r.location);
-            }
-            
-            while ((r = [outString rangeOfString:@"<!--.*-->" options:NSRegularExpressionSearch]).location != NSNotFound)
-            {
-                [outString deleteCharactersInRange:r];
-            }
-            
+    while (YES) {
+        NSRange searchRange = NSMakeRange(0, html.length);
+        NSTextCheckingResult *res = [unwantedTagsRe firstMatchInString:html options:NSCaseInsensitiveSearch range:searchRange];
+        if (!res) {
+            break;
         }
+        NSRange start = res.range;
+        NSString *tag = [html substringWithRange:NSMakeRange(start.location+1, start.length-1)];
+        NSInteger end = [html rangeOfString:[NSString stringWithFormat:@"</%@>", tag] options:NSCaseInsensitiveSearch range:NSMakeRange(start.location, html.length- start.location)].location + tag.length + 3;
+        html = [NSString stringWithFormat:@"%@%@", [html substringToIndex:start.location], [html substringFromIndex:end]];        
     }
-    
-    //NSLog(@"Time stringByStrippingHTMLFromString: %f", [[NSDate date] timeIntervalSinceDate:startTime] );
-    return outString;
+    return html;
 }
 
 + (int)countString:(NSString *)stringToCount inText:(NSString *)text{

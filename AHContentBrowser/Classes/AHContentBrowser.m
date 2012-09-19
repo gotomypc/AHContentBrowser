@@ -46,7 +46,7 @@
     [[NSUserDefaults standardUserDefaults] setBool:TRUE forKey:@"WebKitDeveloperExtras"];
     [[NSUserDefaults standardUserDefaults] synchronize];
     
-    self.url = [NSURL URLWithString:@"http://www.youbeauty.com/nutrition/galleries/10-superfoods?utm_source=nrelate&utm_medium=cpc&utm_campaign=nRelate"];
+    self.url = [NSURL URLWithString:@"http://www.huffingtonpost.com/jeremiah-goulka/mitt-romney-47-percent_b_1896569.html"];
 }
 
 -(IBAction)searchFieldChanged:(id)sender {

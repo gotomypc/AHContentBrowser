@@ -178,8 +178,7 @@ typedef enum{
            
         // set elements for next run
         current =  next + 1;
-        
-        
+                
         if (_contentFlags >= AHSAXSpecialTagCDATA) {
             // we are inside a CData section
             [self writeCDATA:rawData];
