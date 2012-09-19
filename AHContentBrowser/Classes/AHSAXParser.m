@@ -179,6 +179,7 @@ typedef enum{
         // set elements for next run
         current =  next + 1;
         
+        
         if (_contentFlags >= AHSAXSpecialTagCDATA) {
             // we are inside a CData section
             [self writeCDATA:rawData];
@@ -229,7 +230,7 @@ typedef enum{
             }
         } else {
             if (_contentFlags != 0) {
-                [self writeSpecial:rawData lastTagSep:@">"];
+                [self writeSpecial:rawData lastTagSep:lastTagSep];
                 
             } else if (![rawData isEqualToString:@""] && [_delegate respondsToSelector:@selector(onText:)]) {
                 if ([_tagSep isEqualToString:@">"]) {
@@ -249,7 +250,7 @@ typedef enum{
 
 
 -(void) writeCDATA:(NSString*) data {
-    if ([_tagSep isEqualToString:@">"] && [[data substringFromIndex:data.length-2] isEqualToString:@"]]"]) {
+    if (data && data.length > 2 && [_tagSep isEqualToString:@">"] && [[data substringFromIndex:data.length-2] isEqualToString:@"]]"]) {
         // CDATA ends
         if (data.length != 2 && [_delegate respondsToSelector:@selector(onText:)] ) {
             [_delegate onText:[data substringToIndex:data.length-2]];
@@ -359,8 +360,14 @@ typedef enum{
     NSString *name = [self parseTagName:data];
     int type = AHSAXParserElementTypeTag;
     if (self.shouldParseAsXML);
-    else if ([name isEqualToString:@"script"]) type = AHSAXParserElementTypeScript;
-    else if ([name isEqualToString:@"style"]) type = AHSAXParserElementTypeStyle;
+    else if ([name isEqualToString:@"script"]) {
+       type = AHSAXParserElementTypeScript; 
+    }
+    else if ([name isEqualToString:@"style"]) {
+        type = AHSAXParserElementTypeStyle;
+    }
+    
+    
     
     if ([_delegate respondsToSelector:@selector(onOpenTagName:)]) {
         [_delegate onOpenTagName:name];
@@ -417,8 +424,10 @@ typedef enum{
 -(int) tagValue:(NSString*) tag {
     if ([tag isEqualToString:@"style"]) {
         return 1;
+    } else if ([tag isEqualToString:@"script"]) {
+        return 2;
     }
-    return 2;
+    return 0;
 }
 
 # pragma mark - String utils

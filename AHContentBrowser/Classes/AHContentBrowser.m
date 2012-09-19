@@ -46,7 +46,7 @@
     [[NSUserDefaults standardUserDefaults] setBool:TRUE forKey:@"WebKitDeveloperExtras"];
     [[NSUserDefaults standardUserDefaults] synchronize];
     
-    self.url = [NSURL URLWithString:@"http://latimesblogs.latimes.com/world_now/2012/09/death-toll-ticks-higher-as-protests-rage-over-insulting-movie.html"];
+    self.url = [NSURL URLWithString:@"http://www.youbeauty.com/nutrition/galleries/10-superfoods?utm_source=nrelate&utm_medium=cpc&utm_campaign=nRelate"];
 }
 
 -(IBAction)searchFieldChanged:(id)sender {
