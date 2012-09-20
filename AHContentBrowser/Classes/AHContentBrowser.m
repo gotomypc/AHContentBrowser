@@ -15,6 +15,7 @@
     NSSearchField *searchField;
     NSDate *startTime;
     AHContentParser *contentParser;
+    NSRegularExpression *_reImgUrl;
 }
 
 
@@ -22,20 +23,10 @@
     self.wantsLayer = YES;
     self.frameLoadDelegate = self;
     
-    timeTextLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 150, 30)];
-    [timeTextLabel setEditable:NO];
-    [timeTextLabel setBordered:NO];
-    [timeTextLabel setTextColor:[NSColor redColor]];
-    timeTextLabel.backgroundColor = [NSColor clearColor];
-    [self addSubview:timeTextLabel];
+    _reImgUrl = [NSRegularExpression regularExpressionWithPattern:@"\\.(gif|jpe?g|png|webp)$" options:0 error:0];
+    //_reNoContentUrl = [NSRegularExpression regularExpressionWithPattern:@"http:////" options:0 error:0];
+
     
-    NSRect b = self.bounds;
-    CGSize searchFieldSize = CGSizeMake(300, 50);
-    searchField = [[NSSearchField alloc] initWithFrame:NSMakeRect((b.size.width - searchFieldSize.width)/2, 0, searchFieldSize.width, searchFieldSize.height)];
-    [self addSubview:searchField];
-    [searchField setAction:@selector(searchFieldChanged:)];
-    searchField.target = self;
-    searchField.autoresizingMask = NSViewMinXMargin;
     
     //Load in the template string
     NSString *filePath = [[NSBundle mainBundle] pathForResource:@"content" ofType:@"html"];
@@ -44,9 +35,7 @@
     
     // To help us debug webviews
     [[NSUserDefaults standardUserDefaults] setBool:TRUE forKey:@"WebKitDeveloperExtras"];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-    
-    self.url = [NSURL URLWithString:@"http://www.huffingtonpost.com/jeremiah-goulka/mitt-romney-47-percent_b_1896569.html"];
+    [[NSUserDefaults standardUserDefaults] synchronize];    
 }
 
 -(IBAction)searchFieldChanged:(id)sender {
@@ -55,11 +44,23 @@
 }
 
 
+-(BOOL) shouldLoadDirectly:(NSURL*) url {
+    NSString *urlString = url.absoluteString;
+    if ([_reImgUrl numberOfMatchesInString:urlString options:NSCaseInsensitiveSearch range:NSMakeRange(0, urlString.length)]) {
+        return YES;
+    }
+    return NO;
+}
 -(void) setUrl:(NSURL *)u {
     startTime = [NSDate date];
 
     _url = u;
     
+    if ([self shouldLoadDirectly:u]) {
+        [[self mainFrame] loadRequest:[NSURLRequest requestWithURL:u]];
+        return;
+    }
+        
     // Download the data and load it into a textview
     [NSURLConnection sendAsynchronousRequest:[NSURLRequest requestWithURL:_url] queue:[NSOperationQueue mainQueue] completionHandler:^(NSURLResponse *res, NSData *data, NSError *e) {
         
@@ -85,7 +86,31 @@
         }];
         
     }];
+}
 
+-(void) setShowDebugInfo:(BOOL)s {
+    _showDebugInfo = s;
+    
+    if (_showDebugInfo) {
+        NSRect b = self.bounds;
+        if (!timeTextLabel) {
+            timeTextLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 150, 30)];
+            [timeTextLabel setEditable:NO];
+            [timeTextLabel setBordered:NO];
+            [timeTextLabel setTextColor:[NSColor redColor]];
+            timeTextLabel.backgroundColor = [NSColor clearColor];
+            CGSize searchFieldSize = CGSizeMake(300, 50);
+            searchField = [[NSSearchField alloc] initWithFrame:NSMakeRect((b.size.width - searchFieldSize.width)/2, 0, searchFieldSize.width, searchFieldSize.height)];
+            [searchField setAction:@selector(searchFieldChanged:)];
+            searchField.target = self;
+            searchField.autoresizingMask = NSViewMinXMargin;
+        }
+        [self addSubview:timeTextLabel];
+        [self addSubview:searchField];
+    } else {
+        [timeTextLabel removeFromSuperview];
+        [searchField removeFromSuperview];
+    }
 }
 
 @end
