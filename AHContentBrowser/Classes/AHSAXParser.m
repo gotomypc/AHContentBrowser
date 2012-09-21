@@ -175,6 +175,9 @@ typedef enum{
         // the next chunk of data to parse
         rawData = [_buffer substringWithRange:NSMakeRange(current, MAX(next-current, 0))];
         
+        if ([rawData rangeOfString:@"post-content"].location != NSNotFound) {
+            NSLog(@"");
+        }
            
         // set elements for next run
         current =  next + 1;
@@ -329,6 +332,7 @@ typedef enum{
 
 -(void) parseAttributesFromData:(NSString*) data lowerCaseNames:(BOOL) useLowerCaseNames {
     
+ 
     NSArray *results = [_reAttrib matchesInString:data options:0 range:NSMakeRange(0, data.length)];
     for (NSTextCheckingResult *res in results) {
         if (res.numberOfRanges <= 1) {

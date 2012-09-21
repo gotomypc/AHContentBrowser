@@ -14,7 +14,7 @@
 {
     _contentBrowser.showDebugInfo = YES;
     // Insert code here to initialize your application
-    _contentBrowser.url = [NSURL URLWithString:@"http://www.huffingtonpost.com/jeremiah-goulka/mitt-romney-47-percent_b_1896569.html"];
+    _contentBrowser.url = [NSURL URLWithString:@"http://dirt.mpora.com/news/friday-insert-title-randoms.html"];
 }
 
 @end

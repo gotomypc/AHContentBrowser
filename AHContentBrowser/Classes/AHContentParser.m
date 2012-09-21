@@ -214,6 +214,8 @@
         _tagCounts = @{@"address": [NSNumber numberWithInteger:-3], @"p": [NSNumber numberWithInteger:20], @"article": [NSNumber numberWithInteger:30], @"blockquote": [NSNumber numberWithInteger:3], @"body": [NSNumber numberWithInteger:-5], @"dd": [NSNumber numberWithInteger:-3], @"em": [NSNumber numberWithInteger:2],  @"div": [NSNumber numberWithInteger:0],  @"br": [NSNumber numberWithInteger:2], @"dl": [NSNumber numberWithInteger:-3], @"dt": [NSNumber numberWithInteger:-3], @"form": [NSNumber numberWithInteger:-3], @"h2": [NSNumber numberWithInteger:0], @"h3": [NSNumber numberWithInteger:0], @"h4": [NSNumber numberWithInteger:0],@"h5": [NSNumber numberWithInteger:0], @"h6": [NSNumber numberWithInteger:0],@"li": [NSNumber numberWithInteger:-3], @"ol": [NSNumber numberWithInteger:-3], @"pre": [NSNumber numberWithInteger:3], @"section": [NSNumber numberWithInteger:15],@"td": [NSNumber numberWithInteger:3], @"th": [NSNumber numberWithInteger:-5],@"ul": [NSNumber numberWithInteger:-3]};
         
         _reCommas = [NSRegularExpression regularExpressionWithPattern:@",[\\s\\,]*" options:0 error:0];;
+        _reUnlikelyCandidates = [NSRegularExpression regularExpressionWithPattern:@"ad-break|aggregrate|auth?or|bookmark|cat|com(?:bx|ment|munity)|date|disqus|extra|foot|header|ignore|links|menu|nav|pag(?:er|ination)|popup|related|remark|rss|share|tags|shoutbox|sidebar|similar|social|sponsor|teaserlist|time|tweet|twitter" options:0 error:0];
+        _reOKMaybeItsACandidate = [NSRegularExpression regularExpressionWithPattern:@"and|article|body|column|main|shadow" options:0 error:0];
         
         _removeIfEmpty = @[@"blockquote", @"li", @"p", @"pre", @"tbody", @"td", @"th", @"thead", @"tr"  ];
         _embeds = @[@"embed", @"object", @"iframe"];
@@ -237,8 +239,6 @@
         
         _rePositive = [NSRegularExpression regularExpressionWithPattern:@"article|blog|body|content|entry|main|news|pag(?:e|ination)|post|story|text" options:0 error:0];
         _reNegative = [NSRegularExpression regularExpressionWithPattern:@"com(?:bx|ment|-)|contact|foot(?:er|note)?|masthead|media|meta|outbrain|promo|related|scroll|shoutbox|sidebar|sponsor|shopping|tags|tool|widget" options:0 error:0];
-        _reUnlikelyCandidates = [NSRegularExpression regularExpressionWithPattern:@"ad-break|aggregrate|auth?or|bookmark|cat|com(?:bx|ment|munity)|date|disqus|extra|foot|header|ignore|links|menu|nav|pag(?:er|ination)|popup|related|remark|rss|share|shoutbox|sidebar|similar|social|sponsor|teaserlist|time|tweet|twitter" options:0 error:0];
-        _reOKMaybeItsACandidate = [NSRegularExpression regularExpressionWithPattern:@"and|article|body|column|main|shadow" options:0 error:0];
         
         
         _reWhitespace = [NSRegularExpression regularExpressionWithPattern:@"\\s+" options:0 error:0];
@@ -321,10 +321,10 @@
 
 -(void) onOpenTagName:(NSString*)name{
     
-    // Ignore a lot of tags
+   
     if (![_contentTags containsObject:name] ) {
         if (_currentElement) {
-            _currentElement.totalScore -= 10;
+            _currentElement.totalScore -= 2;
         }
     }
     
@@ -341,21 +341,17 @@
     if (!value) {
         return;
     }
-    
+
     name = [name lowercaseString];
     AHContentElement *elem = _currentElement;
     
     [elem.attributes setValue:value forKey:name];
     
-    //    if ([name isEqualToString:@"href"] || [name isEqualToString:@"src"]) {
-    //         //fix links
-    //        if ([_reProtocol firstMatchInString:value options:NSCaseInsensitiveSearch range:NSMakeRange(0, value.length)]) {
-    //            [elem.attributes setValue:value forKey:name];
-    //        } else {
-    //            elem.attributes setValue:<#(id)#> forKey:<#(NSString *)#>
-    //        }
-    //    }
-    
+    if ([name isEqualToString:@"class"] || [name isEqualToString:@"id"]) {
+        [elem.elementData appendString:value];
+    }
+   
+
 }
 
 -(void) onText:(NSString*) text{
@@ -368,23 +364,22 @@
 
 -(void) onCloseTag:(NSString*)tagName{
     
-    
+
     AHContentElement *elem = _currentElement;
     
     if (elem.parent) {
         _currentElement = elem.parent;
     }
     
-    if (![_contentTags containsObject:tagName]) {
+ 
+    // Strip all tags but those known to have content
+    
+    // Strip elements with unlikely class or ids like "comments"
+    if (elem.elementData && [_reUnlikelyCandidates numberOfMatchesInString:elem.elementData options:NSCaseInsensitiveSearch range:NSMakeRange(0, elem.elementData.length)] && ![_reOKMaybeItsACandidate numberOfMatchesInString:elem.elementData options:NSCaseInsensitiveSearch range:NSMakeRange(0, elem.elementData.length)]) {
         return;
     }
     
-    if ([elem.attributes.allValues containsObject:@"entry_body_text"]) {
-        NSLog(@"");
-    }
-    
-    
-    // Score...
+    // Start scoring...
     for (NSUInteger i=0; i < elem.children.count; i++) {
         AHContentElement *child = elem.children[i];
         if ([child isKindOfClass:[NSString class]]) {
@@ -401,7 +396,7 @@
             
         } else {
             
-            // we only aggregrate text and link length for elements that have direct text descendants themselves
+            // Only aggregrate text and link length for elements that have direct text descendants themselves
             if (elem.hasChildContainingText) {
                 if ([child.name isEqualToString:@"a"]) {
                     elem.linkLength += child.textLength + child.linkLength;
