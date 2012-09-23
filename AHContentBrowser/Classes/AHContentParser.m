@@ -209,10 +209,10 @@
         _formatTags = @[@"br", @"hr"];
         _headerTags = @[@"h1", @"h2", @"h3", @"h4", @"h5", @"h6"];
         
-        _contentTags = [[_formatTags arrayByAddingObjectsFromArray:@[@"html", @"article", @"section", @"body", @"div", @"p", @"li", @"ol", @"ul", @"a", @"blockquote", @"img", @"iframe", @"pre", @"a", @"td", @"em", @"i", @"strong"]] mutableCopy];
+        _contentTags = [[_formatTags arrayByAddingObjectsFromArray:@[@"html", @"article", @"section", @"body", @"div", @"p", @"li", @"ol", @"ul", @"span", @"a", @"blockquote", @"img", @"iframe", @"pre", @"a", @"td", @"em", @"i", @"strong"]] mutableCopy];
         [_contentTags addObjectsFromArray:_headerTags];
         
-        _candidateTags = [NSArray arrayWithObjects:@"div", @"p", @"ul", @"article", @"section", nil];
+        _candidateTags = [NSArray arrayWithObjects:@"div", @"p", @"ul", @"span", @"article", @"section", nil];
         
         _tagsToSkip = @[ @"iframe", @"aside", @"footer", @"head", @"label", @"nav", @"noscript", @"script", @"select", @"style", @"textarea" @"input", @"font", @"input", @"link", @"meta" ];
         
@@ -389,13 +389,14 @@
     AHContentElement *elem = _currentElement;
     _currentElement = elem.parent;
 
+    if ([elem.elementData rangeOfString:@"articleText"].location != NSNotFound) {
+        NSLog(@"");
+    }
+    
     if (![_contentTags containsObject:tagName] || ![_contentTags containsObject:elem.name]) {
         return;
     }
     
-    if ([elem.attributes.allValues containsObject:@"http://storage1.ihigh.com/js/element.js?cb=googleTranslateElementInit"]) {
-        NSLog(@"");
-    }
     
     // remove empty tags
     if (elem.children.count == 1

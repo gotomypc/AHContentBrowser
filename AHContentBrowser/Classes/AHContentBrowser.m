@@ -70,6 +70,10 @@
     
     [NSURLConnection sendAsynchronousRequest:[NSURLRequest requestWithURL:_url] queue:[NSOperationQueue mainQueue] completionHandler:^(NSURLResponse *res, NSData *data, NSError *e) {
         
+        if (![res.URL.absoluteString isEqualToString:self.url.absoluteString]) {
+            return;
+        }
+        
         NSTimeInterval downloadTime = [[NSDate date] timeIntervalSinceDate:startTime];
         NSLog(@"Time to download: %f", downloadTime);
         contentParser = [[AHContentParser alloc] initWithData:data handler:^(AHContentParser *parser) {
