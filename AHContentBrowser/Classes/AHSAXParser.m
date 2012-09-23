@@ -175,7 +175,7 @@ typedef enum{
         // the next chunk of data to parse
         rawData = [_buffer substringWithRange:NSMakeRange(current, MAX(next-current, 0))];
         
-        if ([rawData rangeOfString:@"post-content"].location != NSNotFound) {
+        if ([rawData rangeOfString:@"googleTranslateElementInit"].location != NSNotFound) {
             NSLog(@"");
         }
            
@@ -252,7 +252,7 @@ typedef enum{
 
 
 -(void) writeCDATA:(NSString*) data {
-    if (data && data.length > 2 && [_tagSep isEqualToString:@">"] && [[data substringFromIndex:data.length-2] isEqualToString:@"]]"]) {
+    if (data && data.length >= 2 && [_tagSep isEqualToString:@">"] && [[data substringFromIndex:data.length-2] isEqualToString:@"]]"]) {
         // CDATA ends
         if (data.length != 2 && [_delegate respondsToSelector:@selector(onText:)] ) {
             [_delegate onText:[data substringToIndex:data.length-2]];
@@ -268,7 +268,7 @@ typedef enum{
 
 
 -(void) writeComment:(NSString*) rawData {
-    if (rawData && rawData.length > 2 && [_tagSep isEqualToString:@">"] && [[rawData substringFromIndex:rawData.length-2] isEqualToString:@"--"]) {
+    if (rawData && rawData.length >= 2 && [_tagSep isEqualToString:@">"] && [[rawData substringFromIndex:rawData.length-2] isEqualToString:@"--"]) {
         // comment ends
         // remove the written flag (also remove the comment flag)
         _contentFlags ^= AHSAXSpecialTagComment;

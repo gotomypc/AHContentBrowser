@@ -32,7 +32,9 @@
 @property (nonatomic) NSInteger textLength;
 @property (nonatomic) NSInteger linkLength;
 @property (nonatomic) NSInteger numOfCommas;
+@property (nonatomic) NSInteger numOfParagraphs;
 @property (nonatomic) NSInteger numOfSentences;
+@property (nonatomic) NSInteger numOfLargeImages;
 @property (nonatomic) CGFloat linkDensity;
 @property (nonatomic) NSMutableDictionary *tagCount;
 @property (nonatomic) NSInteger tagScore;
@@ -128,10 +130,7 @@
 
 @implementation AHContentParser {
     AHContentParserHandler _handler;
-    NSString *_htmlString;
     AHSAXParser *_saxParser;
-    
-    NSMutableArray *_paragraphs;
     
     AHContentElement* _currentElement;
     AHContentElement* _topCandidate;
@@ -141,11 +140,16 @@
     
     NSMutableArray *_contentTags;
     NSArray *_candidateTags;
+    NSMutableArray *_largeImages;
+ 
     
     NSArray *_tagsToSkip;
     NSDictionary *_tagCounts;
-    NSRegularExpression *_reCommas;
     
+    // This hold elements with the name "article".
+    // Most urls  contain zero or one articles 
+    // but some split an article up separated by ads and pics.
+    NSMutableArray *_articleElementArray;
     
     NSArray *_removeIfEmpty;
     NSArray *_embeds;
@@ -159,6 +163,7 @@
     NSArray *_divToPElements;
     NSArray *_okIfEmpty;
     
+    NSRegularExpression *_reCommas;
     NSRegularExpression *_reVideos;
     NSRegularExpression *_reNextLink;
     NSRegularExpression *_rePrevLink;
@@ -200,21 +205,26 @@
 -(id) init {
     self= [super init];
     if (self) {
+    
         _formatTags = @[@"br", @"hr"];
         _headerTags = @[@"h1", @"h2", @"h3", @"h4", @"h5", @"h6"];
         
-        _contentTags = [[_formatTags arrayByAddingObjectsFromArray:@[@"article", @"section", @"body", @"div", @"p", @"li", @"ol", @"ul", @"a", @"blockquote", @"img", @"pre", @"a", @"td", @"em", @"i"]] mutableCopy];
+        _contentTags = [[_formatTags arrayByAddingObjectsFromArray:@[@"html", @"article", @"section", @"body", @"div", @"p", @"li", @"ol", @"ul", @"a", @"blockquote", @"img", @"iframe", @"pre", @"a", @"td", @"em", @"i", @"strong"]] mutableCopy];
         [_contentTags addObjectsFromArray:_headerTags];
         
-        _candidateTags = [NSArray arrayWithObjects:@"div", @"body", @"p", @"ul", @"article", @"section", nil];
+        _candidateTags = [NSArray arrayWithObjects:@"div", @"p", @"ul", @"article", @"section", nil];
         
         _tagsToSkip = @[ @"iframe", @"aside", @"footer", @"head", @"label", @"nav", @"noscript", @"script", @"select", @"style", @"textarea" @"input", @"font", @"input", @"link", @"meta" ];
         
         
-        _tagCounts = @{@"address": [NSNumber numberWithInteger:-3], @"p": [NSNumber numberWithInteger:20], @"article": [NSNumber numberWithInteger:30], @"blockquote": [NSNumber numberWithInteger:3], @"body": [NSNumber numberWithInteger:-5], @"dd": [NSNumber numberWithInteger:-3], @"em": [NSNumber numberWithInteger:2],  @"div": [NSNumber numberWithInteger:0],  @"br": [NSNumber numberWithInteger:2], @"dl": [NSNumber numberWithInteger:-3], @"dt": [NSNumber numberWithInteger:-3], @"form": [NSNumber numberWithInteger:-3], @"h2": [NSNumber numberWithInteger:0], @"h3": [NSNumber numberWithInteger:0], @"h4": [NSNumber numberWithInteger:0],@"h5": [NSNumber numberWithInteger:0], @"h6": [NSNumber numberWithInteger:0],@"li": [NSNumber numberWithInteger:-3], @"ol": [NSNumber numberWithInteger:-3], @"pre": [NSNumber numberWithInteger:3], @"section": [NSNumber numberWithInteger:15],@"td": [NSNumber numberWithInteger:3], @"th": [NSNumber numberWithInteger:-5],@"ul": [NSNumber numberWithInteger:-3]};
+        _tagCounts = @{@"address": [NSNumber numberWithInteger:-3], @"p": [NSNumber numberWithInteger:15], @"article": [NSNumber numberWithInteger:30], @"blockquote": [NSNumber numberWithInteger:3], @"body": [NSNumber numberWithInteger:-5], @"dd": [NSNumber numberWithInteger:-3], @"em": [NSNumber numberWithInteger:2],  @"div": [NSNumber numberWithInteger:0],  @"br": [NSNumber numberWithInteger:2], @"dl": [NSNumber numberWithInteger:-3], @"dt": [NSNumber numberWithInteger:-3], @"form": [NSNumber numberWithInteger:-3], @"h2": [NSNumber numberWithInteger:0], @"h3": [NSNumber numberWithInteger:0], @"h4": [NSNumber numberWithInteger:0],@"h5": [NSNumber numberWithInteger:0], @"h6": [NSNumber numberWithInteger:0],@"li": [NSNumber numberWithInteger:-3], @"ol": [NSNumber numberWithInteger:-3], @"pre": [NSNumber numberWithInteger:3], @"section": [NSNumber numberWithInteger:2],@"td": [NSNumber numberWithInteger:3], @"th": [NSNumber numberWithInteger:-5],@"ul": [NSNumber numberWithInteger:-3]};
         
+        
+        _articleElementArray = [NSMutableArray array];
+        _largeImages = [NSMutableArray array];
+
         _reCommas = [NSRegularExpression regularExpressionWithPattern:@",[\\s\\,]*" options:0 error:0];;
-        _reUnlikelyCandidates = [NSRegularExpression regularExpressionWithPattern:@"ad-break|aggregrate|auth?or|bookmark|cat|com(?:bx|ment|munity)|date|disqus|extra|foot|header|ignore|links|menu|nav|pag(?:er|ination)|popup|related|remark|rss|share|tags|shoutbox|sidebar|similar|social|sponsor|teaserlist|time|tweet|twitter" options:0 error:0];
+        _reUnlikelyCandidates = [NSRegularExpression regularExpressionWithPattern:@"ad-break|aggregrate|bookmark|disqus|extra|header|ignore|links|menu|nav|pag(?:er|ination)|popup|related|remark|rss|share|tags|shoutbox|sidebar|similar|social|sponsor|teaserlist|time|tweet|twitter" options:0 error:0];
         _reOKMaybeItsACandidate = [NSRegularExpression regularExpressionWithPattern:@"and|article|body|column|main|shadow" options:0 error:0];
         
         _removeIfEmpty = @[@"blockquote", @"li", @"p", @"pre", @"tbody", @"td", @"th", @"thead", @"tr"  ];
@@ -270,10 +280,8 @@
     self = [self init];
     if (self) {
         _handler = [handler copy];
-        _paragraphs = [NSMutableArray array];
         
         if (data) {
-            NSDate *startTime = [NSDate date];
             
             NSInteger encodings[4] = {
                 NSUTF8StringEncoding,
@@ -292,18 +300,24 @@
             }
             
             _saxParser = [[AHSAXParser alloc] initWithDelegate:self];
-            //_htmlString = [self removeUnwantedTags:_htmlString];
-            [_saxParser end:_htmlString];
-            
-            NSLog(@"Time to parse content: %f", [[NSDate date] timeIntervalSinceDate:startTime] );
-            
         }
     }
     return self;
 }
 
+-(void) start {
+    NSDate *startTime = [NSDate date];
+    [_saxParser end:_htmlString];
+    NSLog(@"Time to parse content: %f", [[NSDate date] timeIntervalSinceDate:startTime] );
+
+}
+
 -(NSString*) contentHTML {
-    return [AHContentParser trim:_topCandidate.innerHTML];
+    if (_topCandidate) {
+        [self cleanTopCandidate];
+        return [AHContentParser trim:_topCandidate.innerHTML];
+    }
+    
     //    //remove spaces in front of <br>s
     //    .replace(/(?:\s|&nbsp;?)+(?=<br\/>)/g, "")
     //    //remove <br>s in front of opening & closing <p>s
@@ -312,6 +326,8 @@
     //    .replace(/(?:<br\/>){2,}/g, "</p><p>")
     //    //trim the result
     //    .trim();
+    
+    return nil;
 }
 
 
@@ -328,34 +344,40 @@
         }
     }
     
-    if ([_formatTags containsObject:name] && _currentElement) {
-        [_currentElement.children addObject:[[AHContentElement alloc] initWithTagName:name parent:_currentElement]];
-    } else {
-        _currentElement = [[AHContentElement alloc] initWithTagName:name parent:_currentElement];
-    }
+    _currentElement = [[AHContentElement alloc] initWithTagName:name parent:_currentElement];
 }
 
 
 -(void) onAttributeName:(NSString*)name value:(NSString*) value{
     
-    if (!value) {
+    if (!value || !_currentElement) {
         return;
     }
 
     name = [name lowercaseString];
     AHContentElement *elem = _currentElement;
     
-    [elem.attributes setValue:value forKey:name];
     
     if ([name isEqualToString:@"class"] || [name isEqualToString:@"id"]) {
         [elem.elementData appendString:value];
     }
-   
-
+    
+    if ([_currentElement.name isEqualToString:@"img"]) {
+        if ([name isEqualToString:@"width"]) {
+            NSInteger width = [value integerValue];
+            if (width >= 200) {
+                [_largeImages addObject:_currentElement];
+                _currentElement.numOfLargeImages +=1;
+            }
+        }
+    }
+    
+    if ([_goodAttributes containsObject:name]) {
+        [elem.attributes setValue:value forKey:name];
+    }
 }
 
 -(void) onText:(NSString*) text{
-    
     if (_currentElement) {
         [_currentElement.children addObject:text];
     }
@@ -364,20 +386,35 @@
 
 -(void) onCloseTag:(NSString*)tagName{
     
-
     AHContentElement *elem = _currentElement;
-    
-    if (elem.parent) {
-        _currentElement = elem.parent;
+    _currentElement = elem.parent;
+
+    if (![_contentTags containsObject:tagName] || ![_contentTags containsObject:elem.name]) {
+        return;
     }
     
- 
-    // Strip all tags but those known to have content
+    if ([elem.attributes.allValues containsObject:@"http://storage1.ihigh.com/js/element.js?cb=googleTranslateElementInit"]) {
+        NSLog(@"");
+    }
     
+    // remove empty tags
+    if (elem.children.count == 1
+        && [elem.children[0] isKindOfClass:[NSString class]]) {
+        NSString *txt = [AHContentParser trim:elem.children[0]];
+        if (!txt.length || [txt isEqualToString:@"&nbsp;"] ) {
+            return;
+        }
+    }
+
     // Strip elements with unlikely class or ids like "comments"
+//    NSTextCheckingResult *res = [_reUnlikelyCandidates firstMatchInString:elem.elementData options:NSCaseInsensitiveSearch range:NSMakeRange(0, elem.elementData.length)];
+//    if (res) {
+//        NSString *match = [elem.elementData substringWithRange:res.range];
+//    }
     if (elem.elementData && [_reUnlikelyCandidates numberOfMatchesInString:elem.elementData options:NSCaseInsensitiveSearch range:NSMakeRange(0, elem.elementData.length)] && ![_reOKMaybeItsACandidate numberOfMatchesInString:elem.elementData options:NSCaseInsensitiveSearch range:NSMakeRange(0, elem.elementData.length)]) {
         return;
     }
+
     
     // Start scoring...
     for (NSUInteger i=0; i < elem.children.count; i++) {
@@ -418,9 +455,13 @@
             if (child.totalScore > 20) {
                 elem.totalScore +=5;
             }
+
+            // Keep track of the number of paragraphs, used later
+            if ([child.name isEqualToString:@"p"]) {
+                elem.numOfParagraphs +=1;
+            }
         }
     }
- 
     
     // Score up longer text
     if (elem.textLength > 1000) {
@@ -429,6 +470,11 @@
         elem.totalScore += 10;
     } else if (elem.textLength > 10) {
         elem.totalScore += 5;
+    }
+    
+    // Score divs down with little text, paragraphs and other tags can have little text
+    if (elem.textLength < 100 && [elem.name isEqualTo:@"div"]) {
+        elem.totalScore -= 20;
     }
     
     // Score up text by number of commas
@@ -443,28 +489,64 @@
         if (elem.linkDensity < 0.1) {
             elem.totalScore += 5;
         }
+        if (elem.linkDensity > 0.4) {
+            elem.totalScore -= 5;
+        }
     } else if (elem.textLength > 10) {
         elem.totalScore += 5;
     }
     
+    // Score up for number of largeImages
+    if (elem.numOfLargeImages > 0) {
+        elem.totalScore += 10;
+    }
     
+    // Some article are spread across multiple article tags
+    // We keep track of them here
+    if ([elem.name isEqualToString:@"article"] && elem.totalScore >= 50) {
+        [_articleElementArray addObject:elem];
+    }
+        
+    // Add the elem to it's parent
     [elem.parent.children addObject:elem];
     
-    if ([_candidateTags containsObject:elem.name] && elem.totalScore > 20
+    // Check if the elem is the new topCandidate!
+    if ([_candidateTags containsObject:elem.name] && elem.totalScore > 50
         && elem.totalScore > _topCandidate.totalScore) {
         _topCandidate = elem;
+        self.foundContent = YES;
         NSLog(@"Top candidate is %@ %@ with a score of %ld", elem.name, elem.attributes, elem.totalScore);
-    }
+    } 
     
 }
 
+-(void) cleanTopCandidate {
+    for (AHContentElement *child in [_topCandidate.children copy]) {
+        if ([child isKindOfClass:[NSString class]]) {
+            continue;
+        }
+        // if the top_candidate has a large number of paragraphs, then divs are likely not content
+        // remove divs with little content
+        if (_topCandidate.numOfParagraphs > 3 && [child.name isEqualToString:@"div"] && child.totalScore < 20) {
+            [_topCandidate.children removeObject:child];
+        }
+    }
+    
+    if ([_topCandidate.name isEqualToString:@"article"] && _articleElementArray.count > 1) {
+        [_articleElementArray enumerateObjectsUsingBlock:^(AHContentElement *elem, NSUInteger idx, BOOL *stop) {
+            if ([elem isNotEqualTo:_topCandidate] && elem.children.count > 0) {
+                [_topCandidate.children addObjectsFromArray:elem.children];
+            }
+        }];
+    }
+
+}
 
 -(void) onError{
     
 }
 
 -(void) onEnd{
-    self.foundContent = YES;
     if (_handler) {
         _handler(self);
     }

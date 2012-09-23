@@ -15,4 +15,6 @@
 @property (nonatomic) BOOL showDebugInfo;
 @property (nonatomic) NSURL *url;
 
+-(void) openURL:(NSURL*) url withTitle:(NSString*) title;
+
 @end

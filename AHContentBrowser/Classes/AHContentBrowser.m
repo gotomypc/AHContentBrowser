@@ -16,6 +16,7 @@
     NSDate *startTime;
     AHContentParser *contentParser;
     NSRegularExpression *_reImgUrl;
+    NSString *_title;
 }
 
 
@@ -51,6 +52,12 @@
     }
     return NO;
 }
+
+-(void) openURL:(NSURL*) url withTitle:(NSString*) title {
+    _title = title;
+    self.url = url;
+}
+
 -(void) setUrl:(NSURL *)u {
     startTime = [NSDate date];
 
@@ -60,30 +67,36 @@
         [[self mainFrame] loadRequest:[NSURLRequest requestWithURL:u]];
         return;
     }
-        
-    // Download the data and load it into a textview
+    
     [NSURLConnection sendAsynchronousRequest:[NSURLRequest requestWithURL:_url] queue:[NSOperationQueue mainQueue] completionHandler:^(NSURLResponse *res, NSData *data, NSError *e) {
-        
         
         NSTimeInterval downloadTime = [[NSDate date] timeIntervalSinceDate:startTime];
         NSLog(@"Time to download: %f", downloadTime);
         contentParser = [[AHContentParser alloc] initWithData:data handler:^(AHContentParser *parser) {
             NSString *contentHTML = parser.contentHTML;
             if (contentHTML) {
-                
                 //Load the readable  webview
-                NSString *htmlString  = [templateString stringByReplacingOccurrencesOfString:@"<readableTemplate/>" withString:contentHTML];
-                NSString *path = [[NSBundle mainBundle] bundlePath];
-                NSURL *baseURL = [NSURL fileURLWithPath:path];
+                NSString *htmlString;
+                htmlString  = [templateString stringByReplacingOccurrencesOfString:@"<readableTemplate/>" withString:contentHTML];
+                if (_title && _title.length > 0) {
+                    htmlString = [htmlString stringByReplacingOccurrencesOfString:@"<readableTitle/>" withString:_title];
+                }
+
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    [[self mainFrame] loadHTMLString:htmlString baseURL:baseURL];
+                    [[self mainFrame] loadHTMLString:htmlString baseURL:_url];
                     NSTimeInterval textTime = [[NSDate date] timeIntervalSinceDate:startTime];
                     timeTextLabel.stringValue = [NSString stringWithFormat:@"Time: %f", textTime];
                 });
                 
                 
+            } else if (contentParser.htmlString) {
+                // Load the already downloaded url
+                [[self mainFrame] loadHTMLString:contentParser.htmlString baseURL:_url];
+            } else {
+                [[self mainFrame] loadRequest:[NSURLRequest requestWithURL:_url]];
             }
         }];
+        [contentParser start];
         
     }];
 }
