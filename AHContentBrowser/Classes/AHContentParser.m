@@ -42,6 +42,7 @@
 @property (nonatomic) NSInteger totalScore;
 @property (nonatomic) BOOL hasChildContainingText;
 @property (nonatomic) BOOL isCandidate;
+@property (nonatomic) BOOL hasLowercaseChild;
 
 // Converting to html
 @property (nonatomic, readonly) NSString *outerHTML;
@@ -50,9 +51,7 @@
 
 @end
 
-@implementation AHContentElement {
-    
-}
+@implementation AHContentElement 
 
 -(id) initWithTagName:(NSString*) tagName parent:(AHContentElement*) parent {
     self = [super init];
@@ -129,6 +128,7 @@
 
 
 @implementation AHContentParser {
+    NSDate *_startTime;
     AHContentParserHandler _handler;
     AHSAXParser *_saxParser;
     
@@ -164,6 +164,7 @@
     NSArray *_okIfEmpty;
     
     NSRegularExpression *_reCommas;
+    NSRegularExpression *_reAtLeastOneLowercase;
     NSRegularExpression *_reVideos;
     NSRegularExpression *_reNextLink;
     NSRegularExpression *_rePrevLink;
@@ -223,9 +224,12 @@
         _articleElementArray = [NSMutableArray array];
         _largeImages = [NSMutableArray array];
 
-        _reCommas = [NSRegularExpression regularExpressionWithPattern:@",[\\s\\,]*" options:0 error:0];;
+        _reCommas = [NSRegularExpression regularExpressionWithPattern:@",[\\s\\,]*" options:0 error:0];
+        _reAtLeastOneLowercase = [NSRegularExpression regularExpressionWithPattern:@"[a-z].*[A-Z]|[A-Z].*[a-z]" options:0 error:0];
+        
         _reUnlikelyCandidates = [NSRegularExpression regularExpressionWithPattern:@"ad-break|aggregrate|bookmark|disqus|extra|header|ignore|links|menu|nav|pag(?:er|ination)|popup|related|remark|rss|share|tags|shoutbox|sidebar|similar|social|sponsor|teaserlist|time|tweet|twitter" options:0 error:0];
         _reOKMaybeItsACandidate = [NSRegularExpression regularExpressionWithPattern:@"and|article|body|column|main|shadow" options:0 error:0];
+
         
         _removeIfEmpty = @[@"blockquote", @"li", @"p", @"pre", @"tbody", @"td", @"th", @"thead", @"tr"  ];
         _embeds = @[@"embed", @"object", @"iframe"];
@@ -279,6 +283,8 @@
 - (id) initWithData:(NSData*) data handler:(AHContentParserHandler)handler {
     self = [self init];
     if (self) {
+        _startTime = [NSDate date];
+
         _handler = [handler copy];
         
         if (data) {
@@ -306,15 +312,12 @@
 }
 
 -(void) start {
-    NSDate *startTime = [NSDate date];
     [_saxParser end:_htmlString];
-    NSLog(@"Time to parse content: %f", [[NSDate date] timeIntervalSinceDate:startTime] );
-
 }
 
 -(NSString*) contentHTML {
     if (_topCandidate) {
-        [self cleanTopCandidate];
+        [self cleanCandidate:_topCandidate];
         return [AHContentParser trim:_topCandidate.innerHTML];
     }
     
@@ -330,6 +333,32 @@
     return nil;
 }
 
+-(void) cleanCandidate:(AHContentElement*) candidate {
+    for (AHContentElement *child in [candidate.children copy]) {
+        if ([child isKindOfClass:[NSString class]]) {
+            continue;
+        }
+        
+        // if the candidate has a large number of paragraphs, then divs are likely not content
+        // remove divs with little content
+        if ([child.name isEqualToString:@"div"]) {
+            if (child.totalScore < 20) {
+                [candidate.children removeObject:child];
+            } else {
+                [self cleanCandidate:child];
+            }
+        }
+    }
+    
+    if ([candidate.name isEqualToString:@"article"] && _articleElementArray.count > 1) {
+        [_articleElementArray enumerateObjectsUsingBlock:^(AHContentElement *elem, NSUInteger idx, BOOL *stop) {
+            if ([elem isNotEqualTo:candidate] && elem.children.count > 0) {
+                [candidate.children addObjectsFromArray:elem.children];
+            }
+        }];
+    }
+    
+}
 
 
 #pragma mark - SAX delegate methods
@@ -365,10 +394,11 @@
     if ([_currentElement.name isEqualToString:@"img"]) {
         if ([name isEqualToString:@"width"]) {
             NSInteger width = [value integerValue];
-            if (width >= 200) {
+            if (width >= 300) {
                 [_largeImages addObject:_currentElement];
-                _currentElement.numOfLargeImages +=1;
+                _currentElement.parent.numOfLargeImages +=1;
             }
+    
         }
     }
     
@@ -416,6 +446,10 @@
         return;
     }
 
+    NSRange r = [elem.elementData rangeOfString:@"sims-data"];
+    if (r.length > 0) {
+        NSLog(@"");
+    }
     
     // Start scoring...
     for (NSUInteger i=0; i < elem.children.count; i++) {
@@ -431,6 +465,12 @@
             elem.textLength += childString.length;
             
             elem.numOfCommas += [_reCommas numberOfMatchesInString:childString options:0 range:NSMakeRange(0, childString.length)];
+            
+            
+            // See if this text has lowercase
+            if ([_reAtLeastOneLowercase numberOfMatchesInString:childString options:0 range:NSMakeRange(0, childString.length)]) {
+                elem.hasLowercaseChild = YES;
+            }
             
         } else {
             
@@ -461,8 +501,16 @@
             if ([child.name isEqualToString:@"p"]) {
                 elem.numOfParagraphs +=1;
             }
+            
+            elem.hasLowercaseChild = child.hasLowercaseChild;
+      
+        
         }
     }
+    
+    
+    
+    
     
     // Score up longer text
     if (elem.textLength > 1000) {
@@ -478,8 +526,14 @@
         elem.totalScore -= 20;
     }
     
+    
     // Score up text by number of commas
-    elem.totalScore += elem.numOfCommas;
+    elem.totalScore += roundf(elem.numOfCommas/2);
+    
+    //Score down if there is no child with a lowercase char
+    if (!elem.hasLowercaseChild) {
+        elem.totalScore -= 20;
+    }
     
     // Score up elements with low linkDensitys
     if (elem.linkLength != 0) {
@@ -499,7 +553,7 @@
     
     // Score up for number of largeImages
     if (elem.numOfLargeImages > 0) {
-        elem.totalScore += 10;
+        elem.totalScore += 40;
     }
     
     // Some article are spread across multiple article tags
@@ -521,27 +575,6 @@
     
 }
 
--(void) cleanTopCandidate {
-    for (AHContentElement *child in [_topCandidate.children copy]) {
-        if ([child isKindOfClass:[NSString class]]) {
-            continue;
-        }
-        // if the top_candidate has a large number of paragraphs, then divs are likely not content
-        // remove divs with little content
-        if (_topCandidate.numOfParagraphs > 3 && [child.name isEqualToString:@"div"] && child.totalScore < 20) {
-            [_topCandidate.children removeObject:child];
-        }
-    }
-    
-    if ([_topCandidate.name isEqualToString:@"article"] && _articleElementArray.count > 1) {
-        [_articleElementArray enumerateObjectsUsingBlock:^(AHContentElement *elem, NSUInteger idx, BOOL *stop) {
-            if ([elem isNotEqualTo:_topCandidate] && elem.children.count > 0) {
-                [_topCandidate.children addObjectsFromArray:elem.children];
-            }
-        }];
-    }
-
-}
 
 -(void) onError{
     
@@ -551,6 +584,7 @@
     if (_handler) {
         _handler(self);
     }
+    NSLog(@"Time to parse content: %f", [[NSDate date] timeIntervalSinceDate:_startTime] );
 }
 
 

@@ -14,7 +14,7 @@
 {
     _contentBrowser.showDebugInfo = YES;
     // Insert code here to initialize your application
-    NSURL *url = [NSURL URLWithString:@"http://www.reuters.com/article/2011/02/23/us-usa-maternity-idUSTRE71M62P20110223"];
+    NSURL *url = [NSURL URLWithString:@"http://www.amazon.com/dp/B0050I6402/?tag=johnshorebook-20"];
     [_contentBrowser openURL:url withTitle:@"Sample Title"];
     //_contentBrowser.url = url;
 }

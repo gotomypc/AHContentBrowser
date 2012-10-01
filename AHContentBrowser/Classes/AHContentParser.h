@@ -18,9 +18,10 @@ typedef void(^AHContentParserHandler)(AHContentParser *parser);
 
 @property (nonatomic, readonly) NSMutableArray *imageURLs;
 @property (nonatomic, readonly) NSString* contentHTML;
+@property (nonatomic) NSString* contentHTMLWithTemplate;
 @property (nonatomic, readonly) NSString *htmlString;
 @property (nonatomic) BOOL foundContent;
-
+@property (nonatomic) NSURL *url;
 
 -(void) start;
 

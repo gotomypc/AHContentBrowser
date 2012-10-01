@@ -190,7 +190,7 @@ typedef enum{
             [self writeComment:rawData];
         } else if ([lastTagSep isEqualToString:@"<"]) {
             elementData = [self trimLeft:rawData];
-            if ([[elementData substringToIndex:1] isEqualToString:@"/"]) {
+            if (elementData.length && [[elementData substringToIndex:1] isEqualToString:@"/"]) {
                 elementData = [self parseTagName:[elementData substringFromIndex:1]];
                 if (_contentFlags != 0) {
                     // if it's a closing tag, remove the flag
@@ -204,7 +204,7 @@ typedef enum{
                     
                 }
                 [self processCloseTag:elementData];
-            } else if ([[elementData substringToIndex:1] isEqualToString:@"!"]) {
+            } else if (elementData.length && [[elementData substringToIndex:1] isEqualToString:@"!"]) {
                 if (elementData.length > 7 && [[elementData substringWithRange:NSMakeRange(1, 7)] isEqualToString:@"[CDATA["]) {
                     _contentFlags |= AHSAXSpecialTagCDATA;
                     if ([_delegate respondsToSelector:@selector(onCDATAStart)]) {

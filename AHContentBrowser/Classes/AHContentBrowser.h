@@ -9,12 +9,18 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 
+#define kAHContentBrowserLoaded @"AHContentBrowserLoaded"
+
+
 @interface AHContentBrowser : WebView
 
 
 @property (nonatomic) BOOL showDebugInfo;
-@property (nonatomic) NSURL *url;
+@property (nonatomic, readonly) BOOL isShowingContent;
 
 -(void) openURL:(NSURL*) url withTitle:(NSString*) title;
+
+-(void) showOriginal;
+-(void) showContent;
 
 @end
